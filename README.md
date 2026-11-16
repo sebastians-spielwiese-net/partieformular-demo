@@ -85,6 +85,8 @@ Partien in deutscher und englischer Schreibweise werden ohne Befund gelesen und 
 ## Foto lesen (Gerüst)
 
 Im Tab „Foto lesen“ findet die App das Raster des Formulars selbst, und ein Erkenner liest jede beschriebene Zelle. Das Raster lässt sich von Hand nachstellen (Ausschnitt, Drehung, Zeilen, Blöcke, Spaltenbreiten).
+**Datenschutz beim Hochladen:** Ein Foto geht an den Server, auf dem die App läuft (öffentliche Fassung: Streamlit Community Cloud) und liegt dort nur für die Sitzung im Arbeitsspeicher. Die App speichert es nicht und gibt es nicht weiter, außer der Nutzer schaltet das Vision-Modell zu (siehe unten). Auf Formularen stehen Namen von Spielern: nur Formulare hochladen, bei denen die Spieler einverstanden sind, oder die Kopfzeile vorher abschneiden. Für den Betrieb der Plattform gilt deren Datenschutzerklärung.
+
 Der Weg vom Bild zum Zug hat zwei Teile, die in der Prüfung zusammenlaufen:
 
 * **Text:** Das gierige Ergebnis des Erkenners, unsichere Zeichen (Sicherheit unter 0,6) als `?`. Der Text läuft wie abgetippter Text durch Lese- und Prüfregeln, also mit den Jokern und dem Fortsetzungstest von oben.

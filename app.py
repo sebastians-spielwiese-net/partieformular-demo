@@ -196,7 +196,9 @@ c9.text_input("Elo Schwarz (optional)", key="kopf_BlackElo")
 kopf_roh = {k: st.session_state.get(f"kopf_{k}", "") for k in KOPF_FELDER}
 
 foto = st.file_uploader("Foto oder Scan des Formulars (optional)", type=["png", "jpg", "jpeg", "webp"], key="pf_foto",
-                        help="Das Bild bleibt in dieser Sitzung. Es liegt neben der Tabelle zum Abtippen; im Tab „Foto lesen“ kann die App es lesen.")
+                        help="Das Bild wird zum Server dieser App übertragen und liegt dort nur für diese Sitzung im Arbeitsspeicher. Es liegt neben der Tabelle zum Abtippen; im Tab „Foto lesen“ kann die App es lesen.")
+st.caption("**Datenschutz:** Ein hochgeladenes Foto geht an den Server, auf dem diese App läuft (bei der öffentlichen Fassung Streamlit Community Cloud). Die App speichert es nicht und gibt es nicht weiter, außer Du schaltest unten ausdrücklich das Vision-Modell zu. "
+           "Auf Formularen stehen Namen von Spielern: Lade nur Formulare hoch, bei denen die Spieler damit einverstanden sind, oder schneide die Kopfzeile mit den Namen vorher ab. Für den Betrieb der Plattform gilt deren eigene Datenschutzerklärung.")
 tab_tabelle, tab_text, tab_foto = st.tabs(["Zug für Zug", "Text einfügen", "Foto lesen"])
 with tab_tabelle:
     links, rechts = st.columns([3, 2]) if foto is not None else (st.container(), None)
@@ -268,7 +270,7 @@ with tab_foto:
             st.warning("Der Erkenner ist hier nicht installiert (Paket `onnxruntime`). Die Tabelle zum Abtippen funktioniert weiter.")
         elif not ER.modell_vorhanden():
             st.info(f"Für das Lesen braucht die App ein Modell (nach „chess-ocr-bilstm“, MIT-Lizenz, nachtrainiert für englische und deutsche Figurenbuchstaben, {ER.MODELL_BYTES // 1_000_000} MB). "
-                    "Es wird einmal geladen und lokal gespeichert; Dein Foto verlässt dabei nicht diese Sitzung.")
+                    "Es wird einmal von GitHub auf den Server dieser App geladen; Dein Foto wird dabei nicht mitgeschickt.")
             if st.button("Modell laden"):
                 with st.spinner("Lade das Modell …"):
                     try:
