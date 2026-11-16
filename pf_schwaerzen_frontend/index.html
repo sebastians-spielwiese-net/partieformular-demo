@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Foto wählen und Namen schwärzen</title>
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; font-family: "Source Sans", "Segoe UI", sans-serif; color: #31333f; font-size: 15px; }
+  #w { max-width: 780px; }
+  .hinweis { margin: 0.4rem 0; color: #555867; line-height: 1.4; }
+  .btn, button { display: inline-block; margin: 0.2rem 0.35rem 0.2rem 0; padding: 0.4rem 0.85rem; border: 1px solid #b9bcc9; background: #fff; border-radius: 0.4rem; cursor: pointer; font: inherit; color: inherit; }
+  .btn:hover, button:hover { background: #f0f2f6; }
+  button.primaer { background: #ff4b4b; border-color: #ff4b4b; color: #fff; }
+  button.primaer:hover { background: #e03e3e; }
+  canvas { display: block; max-width: 100%; border: 1px solid #b9bcc9; cursor: crosshair; touch-action: none; background: #eee; }
+  .zeile { margin: 0.45rem 0; }
+  input[type=range] { vertical-align: middle; width: 12rem; }
+  #status { margin-top: 0.4rem; font-weight: 600; color: #1c6b36; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div id="w">
+  <div id="start">
+    <label class="btn" for="datei">Foto oder Scan wählen</label>
+    <input id="datei" type="file" accept="image/*" hidden>
+    <p class="hinweis">Die Datei wird nur in Deinem Browser gelesen. Du schwärzt die Namen, und erst nach „Übernehmen“ geht das Bild mit den schwarzen Flächen an die App. Dateiname und Aufnahmedaten (EXIF) werden nicht mitgeschickt.</p>
+  </div>
+  <div id="editor" hidden>
+    <p class="hinweis">Ziehe mit der Maus oder dem Finger Rechtecke über alles, was nicht an die App gehen soll (Namen, Verein, Unterschriften). Schwarz ist es auch im Bild, das gesendet wird.</p>
+    <canvas id="c" aria-label="Vorschau des Formulars mit schwarzen Markierungen"></canvas>
+    <div class="zeile"><label for="oben">Obere Zone schwärzen:</label> <input id="oben" type="range" min="0" max="40" value="0" step="1"> <output id="obenwert">0 %</output></div>
+    <div class="zeile">
+      <button id="zurueck" type="button">Letzte Markierung entfernen</button>
+      <button id="alle" type="button">Alle entfernen</button>
+      <button id="neu" type="button">Anderes Foto wählen</button>
+    </div>
+    <div class="zeile"><button id="ok" type="button" class="primaer">Übernehmen: Bild an die App senden</button></div>
+    <div id="status" role="status"></div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var MAX_SEITE = 2200, QUALITAET = 0.9;
+  var datei = document.getElementById("datei"), start = document.getElementById("start"), editor = document.getElementById("editor");
+  var canvas = document.getElementById("c"), ctx = canvas.getContext("2d"), oben = document.getElementById("oben"), obenwert = document.getElementById("obenwert");
+  var status = document.getElementById("status");
+  var img = null, nat = { w: 0, h: 0 }, boxen = [], zieht = null, scale = 1, zaehler = 0, url = null;
+
+  function senden(typ, daten) {
+    window.parent.postMessage(Object.assign({ isStreamlitMessage: true, type: typ }, daten || {}), "*");
+  }
+  function hoehe() { senden("streamlit:setFrameHeight", { height: Math.ceil(document.body.scrollHeight) + 4 }); }
+
+  function zeichnen() {
+    if (!img) { return; }
+    var cssW = Math.min(document.getElementById("w").clientWidth || 760, 760);
+    scale = cssW / nat.w;
+    canvas.width = Math.round(nat.w * scale);
+    canvas.height = Math.round(nat.h * scale);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#000";
+    var z = parseInt(oben.value, 10);
+    if (z > 0) { ctx.fillRect(0, 0, canvas.width, canvas.height * z / 100); }
+    boxen.forEach(function (b) { ctx.fillRect(b.x * scale, b.y * scale, b.w * scale, b.h * scale); });
+    if (zieht) {
+      var r = rechteck(zieht);
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(r.x * scale, r.y * scale, r.w * scale, r.h * scale);
+      ctx.strokeStyle = "#ff4b4b"; ctx.lineWidth = 2;
+      ctx.strokeRect(r.x * scale, r.y * scale, r.w * scale, r.h * scale);
+    }
+    hoehe();
+  }
+  function rechteck(z) {
+    return { x: Math.min(z.x0, z.x1), y: Math.min(z.y0, z.y1), w: Math.abs(z.x1 - z.x0), h: Math.abs(z.y1 - z.y0) };
+  }
+  function punkt(ev) {
+    var r = canvas.getBoundingClientRect();
+    return { x: Math.max(0, Math.min(nat.w, (ev.clientX - r.left) / r.width * nat.w)), y: Math.max(0, Math.min(nat.h, (ev.clientY - r.top) / r.height * nat.h)) };
+  }
+
+  datei.addEventListener("change", function () {
+    var f = datei.files && datei.files[0];
+    if (!f) { return; }
+    if (url) { URL.revokeObjectURL(url); }
+    url = URL.createObjectURL(f);
+    var bild = new Image();
+    bild.onload = function () {
+      img = bild; nat = { w: bild.naturalWidth, h: bild.naturalHeight };
+      boxen = []; oben.value = 0; obenwert.textContent = "0 %"; status.textContent = "";
+      start.hidden = true; editor.hidden = false;
+      zeichnen();
+    };
+    bild.onerror = function () { status.textContent = ""; start.querySelector(".hinweis").textContent = "Diese Datei ließ sich nicht als Bild lesen. Wähle ein PNG, JPEG oder WebP."; };
+    bild.src = url;
+  });
+
+  canvas.addEventListener("pointerdown", function (ev) {
+    if (!img || ev.button > 0) { return; }
+    var p = punkt(ev);
+    zieht = { x0: p.x, y0: p.y, x1: p.x, y1: p.y };
+    canvas.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+  });
+  canvas.addEventListener("pointermove", function (ev) {
+    if (!zieht) { return; }
+    var p = punkt(ev);
+    zieht.x1 = p.x; zieht.y1 = p.y;
+    zeichnen();
+  });
+  function loslassen() {
+    if (!zieht) { return; }
+    var r = rechteck(zieht);
+    zieht = null;
+    if (r.w * scale > 6 && r.h * scale > 6) { boxen.push(r); status.textContent = ""; }
+    zeichnen();
+  }
+  canvas.addEventListener("pointerup", loslassen);
+  canvas.addEventListener("pointercancel", function () { zieht = null; zeichnen(); });
+
+  oben.addEventListener("input", function () { obenwert.textContent = oben.value + " %"; status.textContent = ""; zeichnen(); });
+  document.getElementById("zurueck").addEventListener("click", function () { boxen.pop(); zeichnen(); });
+  document.getElementById("alle").addEventListener("click", function () { boxen = []; oben.value = 0; obenwert.textContent = "0 %"; zeichnen(); });
+  document.getElementById("neu").addEventListener("click", function () {
+    img = null; boxen = []; datei.value = ""; editor.hidden = true; start.hidden = false; status.textContent = "";
+    zaehler += 1;
+    senden("streamlit:setComponentValue", { value: { n: zaehler + "-" + Date.now(), dataUrl: null }, dataType: "json" });
+    hoehe();
+  });
+
+  document.getElementById("ok").addEventListener("click", function () {
+    if (!img) { return; }
+    var k = Math.min(1, MAX_SEITE / Math.max(nat.w, nat.h));
+    var W = Math.round(nat.w * k), H = Math.round(nat.h * k);
+    var c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    var x = c.getContext("2d");
+    x.drawImage(img, 0, 0, W, H);                                  // neu gezeichnet: EXIF und Dateiname bleiben zurück
+    x.fillStyle = "#000";
+    var z = parseInt(oben.value, 10);
+    if (z > 0) { x.fillRect(0, 0, W, H * z / 100); }
+    boxen.forEach(function (b) { x.fillRect(b.x * k, b.y * k, b.w * k, b.h * k); });
+    zaehler += 1;
+    senden("streamlit:setComponentValue", { value: { n: zaehler + "-" + Date.now(), dataUrl: c.toDataURL("image/jpeg", QUALITAET), breite: W, hoehe: H, flaechen: boxen.length + (z > 0 ? 1 : 0) }, dataType: "json" });
+    status.textContent = "Übernommen. Das Bild mit den schwarzen Flächen ist bei der App. Weitere Markierungen? Setze sie und übernimm erneut.";
+    hoehe();
+  });
+
+  window.addEventListener("message", function (ev) { if (ev.data && ev.data.type === "streamlit:render") { hoehe(); } });
+  window.addEventListener("resize", zeichnen);
+  senden("streamlit:componentReady", { apiVersion: 1 });
+  hoehe();
+})();
+</script>
+</body>
+</html>

@@ -24,6 +24,7 @@ import pf_notation as N
 import pf_pgn as G
 import pf_pruefung as P
 import pf_raster as R
+import pf_schwaerzen as SW
 
 modul_frisch.aktualisieren(__file__)      # geänderte Hilfsmodule nach einem Update neu laden (die Cloud behält sie sonst bis zum Neustart)
 
@@ -207,17 +208,17 @@ c8.text_input("Elo Weiß (optional)", key="kopf_WhiteElo")
 c9.text_input("Elo Schwarz (optional)", key="kopf_BlackElo")
 kopf_roh = {k: st.session_state.get(f"kopf_{k}", "") for k in KOPF_FELDER}
 
-zustimmung = st.checkbox("Ich bestätige: Die Spieler auf dem Formular sind mit dem Hochladen einverstanden, oder ich habe die Namen vorher abgeschnitten.", key="pf_foto_ok",
-                         help="Ohne diese Bestätigung gibt es kein Upload-Feld. Ohne Foto lässt sich alles andere nutzen: abtippen, Text einfügen, prüfen, PGN erzeugen.")
+zustimmung = st.checkbox("Ich bestätige: Ich schwärze die Namen auf dem Foto, oder die Spieler sind mit dem Hochladen einverstanden.", key="pf_foto_ok",
+                         help="Ohne diese Bestätigung gibt es keine Foto-Auswahl. Ohne Foto lässt sich alles andere nutzen: abtippen, Text einfügen, prüfen, PGN erzeugen.")
 foto = None
 if zustimmung:
-    foto = st.file_uploader("Foto oder Scan des Formulars (optional)", type=["png", "jpg", "jpeg", "webp"], key="pf_foto",
-                            help="Das Bild wird zum Server dieser App übertragen und liegt dort nur für diese Sitzung im Arbeitsspeicher. Es liegt neben der Tabelle zum Abtippen; im Tab „Foto lesen“ kann die App es lesen.")
+    st.markdown("**Foto oder Scan des Formulars (optional).** Das Foto wird nur in Deinem Browser gelesen. Du schwärzt dort die Namen; erst nach „Übernehmen“ geht das Bild mit den schwarzen Flächen an den Server dieser App.")
+    foto = SW.foto_schwaerzen(key="pf_foto")
 if foto is None:
     _bild_vergessen()
-st.caption("**Datenschutz:** Ein hochgeladenes Foto geht an den Server, auf dem diese App läuft (bei der öffentlichen Fassung Streamlit Community Cloud). Die App speichert es nicht, "
-           "hält es nur für diese Sitzung im Arbeitsspeicher und gibt es nicht weiter. Auf Formularen stehen Namen von Spielern: Das Upload-Feld erscheint erst nach Deiner Bestätigung. "
-           "Schneide die Kopfzeile mit den Namen am besten vorher ab. Für den Betrieb der Plattform gilt deren eigene Datenschutzerklärung.")
+st.caption("**Datenschutz:** Das Original verlässt Deinen Browser nicht: Die Datei wird dort gelesen, Namen schwärzt Du dort, und nur das neu gezeichnete Bild (ohne Dateiname und Aufnahmedaten) geht an den Server, "
+           "auf dem diese App läuft (bei der öffentlichen Fassung Streamlit Community Cloud). Die App speichert es nicht, hält es nur für diese Sitzung im Arbeitsspeicher und gibt es nicht weiter. "
+           "Ob alle Namen geschwärzt sind, prüfst Du selbst: Die App kann es nicht erkennen. Für den Betrieb der Plattform gilt deren eigene Datenschutzerklärung.")
 tab_tabelle, tab_text, tab_foto = st.tabs(["Zug für Zug", "Text einfügen", "Foto lesen"])
 with tab_tabelle:
     links, rechts = st.columns([3, 2]) if foto is not None else (st.container(), None)
@@ -230,7 +231,7 @@ with tab_tabelle:
         st.session_state["pf_zeilen"] = [["" if pd.isna(w) else str(w), "" if pd.isna(s) else str(s)] for w, s in bearbeitet.itertuples(index=False)]
     if rechts is not None:
         with rechts:
-            st.image(foto, caption="Dein Formular (nur zur Ansicht; zum Vergrößern auf das Bild klicken)", width="stretch")
+            st.image(foto.getvalue(), caption="Dein Formular, wie es bei der App angekommen ist (zum Vergrößern auf das Bild klicken)", width="stretch")
 with tab_text:
     st.text_area("Züge als Text (auch ein ganzes PGN mit Kopfzeilen)", key="pf_import_text", height=130,
                  placeholder='Zum Beispiel: 1. e4 e5 2. Sf3 Sc6 3. Lb5 a6  oder  [White "Muster, Max"] … 1. e4 e5 …')
@@ -240,7 +241,7 @@ with tab_text:
 
 with tab_foto:
     if foto is None:
-        st.info("Bestätige oben das Einverständnis der Spieler und lade ein Foto oder einen Scan Deines Partieformulars hoch. Hier stellst Du dann das Raster ein, und die App liest die Zellen.")
+        st.info("Bestätige oben, wähle ein Foto oder einen Scan Deines Partieformulars und schwärze die Namen. Hier stellst Du dann das Raster ein, und die App liest die Zellen.")
     else:
         bild = _bild_laden(foto)
         if st.session_state.get("pf_r_foto") != foto.file_id:              # neues Foto: Raster gleich selbst suchen

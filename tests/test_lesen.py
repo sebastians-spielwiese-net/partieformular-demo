@@ -12,6 +12,7 @@ from zufall import zufallsspiel
 import pf_brett as B
 import pf_ctc as C
 import pf_erkenner as E
+import pf_schwaerzen as SW
 import pf_lesen as L
 import pf_pruefung as P
 import pf_raster as R
@@ -260,11 +261,11 @@ def app_mit_foto(monkeypatch, wahrheit, unsicher=0.0, falsch=0.0, onnx=True, mod
     monkeypatch.setattr(E, "modell_vorhanden", lambda *a: modell)
     monkeypatch.setattr(E, "OnnxErkenner", lambda **kw: E.SimulierterErkenner(wahrheit, unsicher, falsch, seed=1))
     bild, _ = formular(texte={(i // 2 + 1, i % 2): s for i, s in wahrheit.items()})
+    foto = SW.Foto(file_id="test-1", daten=png_bytes(bild))
+    monkeypatch.setattr(SW, "foto_schwaerzen", lambda key: foto)       # die Komponente (HTML/JS) läuft nur im Browser
     at = AppTest.from_file(PFAD, default_timeout=120)
     at.run()
-    at.checkbox(key="pf_foto_ok").check().run()                       # Upload-Feld erscheint erst nach der Bestätigung
-    at.file_uploader(key="pf_foto").set_value(("formular.png", png_bytes(bild), "image/png"))
-    at.run()
+    at.checkbox(key="pf_foto_ok").check().run()                       # die Foto-Auswahl erscheint erst nach der Bestätigung
     assert not at.exception, [e.value for e in at.exception]
     return at
 

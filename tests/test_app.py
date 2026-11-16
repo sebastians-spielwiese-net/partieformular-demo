@@ -172,23 +172,20 @@ def test_tabellenbearbeitung_nach_einem_vorschlag_beginnt_neu():
     assert at.session_state["pf_v"] == v + 1 and at.session_state["pf_zeilen"][0][0] == "e4" and at.session_state["pf_zeilen"][10][1] == "Sbd7"
 
 
-# ------------------------------------------------------------------------------------------------- Datenschutz beim Foto-Upload
-def _uploader(at):
-    return [e for e in at.get("file_uploader")] if hasattr(at, "get") else []
+# ------------------------------------------------------------------------------------------------- Datenschutz beim Foto
+def test_foto_auswahl_erscheint_erst_nach_der_bestaetigung(monkeypatch):
+    import pf_schwaerzen as SW
 
-
-def test_upload_feld_erscheint_erst_nach_der_bestaetigung():
+    aufrufe = []
+    monkeypatch.setattr(SW, "foto_schwaerzen", lambda key: aufrufe.append(key))
     at = AppTest.from_file(PFAD, default_timeout=60)
     at.run()
     assert not at.exception
-    assert at.checkbox(key="pf_foto_ok").value is False
-    assert len(_uploader(at)) == 0
+    assert at.checkbox(key="pf_foto_ok").value is False and aufrufe == []
     at.checkbox(key="pf_foto_ok").check().run()
-    assert not at.exception
-    assert len(_uploader(at)) == 1
+    assert not at.exception and aufrufe == ["pf_foto"]
     at.checkbox(key="pf_foto_ok").uncheck().run()
-    assert not at.exception
-    assert len(_uploader(at)) == 0 and "pf_bild" not in at.session_state
+    assert not at.exception and aufrufe == ["pf_foto"] and "pf_bild" not in at.session_state
 
 
 def test_foto_wird_nicht_in_einem_sitzungsuebergreifenden_cache_gehalten():
@@ -196,3 +193,4 @@ def test_foto_wird_nicht_in_einem_sitzungsuebergreifenden_cache_gehalten():
     assert "@st.cache_data" not in text, "st.cache_data würde hochgeladene Bilder für andere Sitzungen im Server-Speicher behalten"
     assert "cache_resource" in text                                          # nur das Erkennungsmodell (keine Nutzerdaten)
     assert "_bild_laden(foto)" in text and "session_state" in text
+    assert "file_uploader" not in text, "das Original darf den Browser nicht verlassen: nur die Schwärzen-Komponente liefert ein Bild"
