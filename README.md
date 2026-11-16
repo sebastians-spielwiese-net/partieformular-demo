@@ -4,6 +4,8 @@ Interaktive Streamlit-Demo der [Sebastians Spielwiese](https://sebastians-spielw
 spielt die Partie nach, **prüft jeden Zug gegen die Schachregeln**, markiert **unklare Stellen**, begründet **Regelverstöße** und erzeugt ein **PGN** für die Datenbank.
 Nacharbeit ist ausdrücklich vorgesehen: Jede Entscheidung steht als Text in der Zelle, nicht in einem versteckten Zustand.
 
+Live: [spielwiese-partieformular.streamlit.app](https://spielwiese-partieformular.streamlit.app/)
+
 Lauffähig mit: `streamlit run app.py`
 
 ## Was die Demo zeigt
