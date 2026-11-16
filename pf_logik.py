@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass
 from functools import lru_cache
 
+import pf_lesen as LS
 import pf_pgn as G
 import pf_pruefung as P
 
@@ -132,3 +133,26 @@ def dateiname(kopf_roh: dict, modus: str = EXPORT_SAUBER) -> str:
     teile = [teil(kopf_roh.get("White", "")) or "Weiss", teil(kopf_roh.get("Black", "")) or "Schwarz", datum.replace("?", "").strip(".").replace("..", ".")]
     name = "_".join(t for t in teile if t)
     return name + ("" if modus == EXPORT_SAUBER else f"_{modus}") + ".pgn"
+
+
+def _prozent(x: float) -> str:
+    return f"{100 * x:.0f} %"
+
+
+def bild_hinweis(u: LS.Entscheidung, schreibweise: str = "en") -> str:
+    """Ein Satz zu einer markierten Zelle, passend zum Grund der Markierung: schlechte Passung, Bildanteil unter der Schwelle oder uneinige Suche.
+    Züge stehen in der Schreibweise des Formulars (`schreibweise`: "de" oder "en")."""
+    san = in_schreibweise(u.san, schreibweise)
+    nach_bild = [(in_schreibweise(s, schreibweise), a) for s, a in u.bild_alternativen if a >= 0.02]
+    liste = ", ".join(f"{s} ({_prozent(a)})" for s, a in nach_bild)
+    if u.passt_schlecht():
+        satz = f"Die Zelle sieht deutlich anders aus, als {san} aussehen müsste"
+        if nach_bild and nach_bild[0][1] > u.zellanteil:
+            satz += f"; nach dem Bild allein wäre eher {liste} gemeint"
+        return satz + "."
+    if u.zellanteil < LS.SCHWELLE_UNSICHER:
+        if liste:
+            return f"Das Bild ist nicht eindeutig: {san} ({_prozent(u.zellanteil)}), daneben {liste}."
+        return f"Das Bild ist nicht eindeutig: {san} bekommt {_prozent(u.zellanteil)} unter den legalen Zügen, der Rest verteilt sich auf viele andere."
+    alternativen = ", ".join(f"{in_schreibweise(s, schreibweise)} ({_prozent(a)})" for s, a in u.alternativen if a >= 0.02)
+    return f"Die Suche war sich hier nicht einig: {san} ({_prozent(u.wahrscheinlichkeit)})" + (f", daneben {alternativen}" if alternativen else "") + "."

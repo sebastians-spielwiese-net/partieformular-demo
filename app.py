@@ -386,8 +386,8 @@ else:
     if unsicher_bild:
         erste = min((e for e in unsicher_bild.values() if e.passt_schlecht()), key=lambda e: e.ply, default=min(unsicher_bild.values(), key=lambda e: e.ply))
         folge = st.session_state.get("pf_folge_ab")
-        st.info(f"**Von oben nach unten prüfen:** Fehler ziehen spätere Züge mit. Beginne bei {erste.ply // 2 + 1}. {'Weiß' if erste.ply % 2 == 0 else 'Schwarz'} "
-                f"(Bild: {formular_san(erste.san)} {pct(erste.zellanteil, 0)}" + "".join(f", {formular_san(s)} {pct(a, 0)}" for s, a in erste.bild_alternativen[:2] if a >= 0.02) + "). "
+        st.info(f"**Von oben nach unten prüfen:** Fehler ziehen spätere Züge mit. Beginne bei {erste.ply // 2 + 1}. {'Weiß' if erste.ply % 2 == 0 else 'Schwarz'}: "
+                f"{L.bild_hinweis(erste, schreibweise)} "
                 + (f"Ab dem {folge // 2 + 1}. Zug häufen sich unsichere Zellen: Dort ist vermutlich ein früherer Fehler die Ursache, und die Züge danach sind oft alle falsch. " if folge is not None else "")
                 + "Korrigiere die Zelle in der Tabelle, dann „Korrekturen übernehmen und weiter suchen“.")
     if p.datenbanktauglich() and unsicher_bild:
@@ -417,8 +417,7 @@ else:
             u = unsicher_bild.get(e.ply)
             eintrag["Bild"] = ("✗ passt schlecht" if u.passt_schlecht() else "⚠ unsicher") if u else ""
             if u:
-                sonst = ", ".join(f"{formular_san(s)} {pct(a, 0)}" for s, a in u.bild_alternativen if a >= 0.02)
-                hinweis = (hinweis + " · " if hinweis else "") + f"Bild: {formular_san(u.san)} nur {pct(u.zellanteil, 0)}" + (f", sonst {sonst}" if sonst else "")
+                hinweis = (hinweis + " · " if hinweis else "") + L.bild_hinweis(u, schreibweise)
         eintrag.update({"Hinweis": hinweis, "_s": e.status})
         zeilen_tab.append(eintrag)
     if zeilen_tab:

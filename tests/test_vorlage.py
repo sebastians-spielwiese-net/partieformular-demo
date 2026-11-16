@@ -233,3 +233,18 @@ def test_folgefehler_zone():
     einzeln = [False, True, False, False, True, False, False, False, False, False]
     assert LS.folgefehler_ab(einzeln) is None                      # einzelne Zweifel sind keine Kette
     assert LS.folgefehler_ab([True, True, True]) is None           # zu wenige Zellen, um von einer Kette zu sprechen
+
+
+def test_bild_hinweis_je_nach_grund():
+    import pf_logik as L
+
+    def e(**kw):
+        return LS.Entscheidung(0, "Nd7", kw.pop("wahrscheinlichkeit", 1.0), kw.pop("alternativen", []), kw.pop("zellanteil", 1.0), kw.pop("bild_alternativen", []), kw.pop("passung", 0.0))
+
+    schlecht = L.bild_hinweis(e(passung=-6.0, zellanteil=0.3, bild_alternativen=[("Nb6", 0.6)]), "de")
+    assert schlecht.startswith("Die Zelle sieht deutlich anders aus, als Sd7 aussehen müsste") and "eher Sb6 (60 %)" in schlecht
+    knapp = L.bild_hinweis(e(zellanteil=0.92, bild_alternativen=[("Nb6", 0.06)]), "de")
+    assert knapp == "Das Bild ist nicht eindeutig: Sd7 (92 %), daneben Sb6 (6 %)." and "nur" not in knapp
+    assert "verteilt sich auf viele andere" in L.bild_hinweis(e(zellanteil=0.9), "en")
+    suche = L.bild_hinweis(e(wahrscheinlichkeit=0.7, alternativen=[("Nb6", 0.3)]), "en")
+    assert suche == "Die Suche war sich hier nicht einig: Nd7 (70 %), daneben Nb6 (30 %)."
