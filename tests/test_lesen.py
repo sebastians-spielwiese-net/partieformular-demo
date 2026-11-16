@@ -182,7 +182,7 @@ class Sitzung:
         x = eingabe["input"]
         self.eingaben.append(x)
         rng = np.random.default_rng(int(abs(x).sum() * 1000) % 2**32)
-        roh = rng.normal(size=(63, 1, self.klassen))
+        roh = rng.normal(size=(63, x.shape[0], self.klassen))                                  # [T, Stapel, Klassen] wie das echte Modell
         return [roh - np.log(np.exp(roh).sum(axis=-1, keepdims=True))]
 
 
@@ -204,7 +204,7 @@ def test_original_mit_28_klassen_wird_auf_32_aufgefuellt(monkeypatch):
 def test_tta_liest_fuenfmal_und_mittelt(monkeypatch):
     er = onnx_erkenner(monkeypatch, 32, True)
     lp = er.logp(Image.new("L", (200, 60), 200), 0)
-    assert len(er.sitzung.eingaben) == len(E.TTA_VARIANTEN) == 5 and all(x.shape == (1, 1, 64, 256) for x in er.sitzung.eingaben)
+    assert len(E.TTA_VARIANTEN) == 5 and [x.shape for x in er.sitzung.eingaben] == [(5, 1, 64, 256)], "alle fünf Varianten in einem Durchlauf"
     assert np.exp(lp).sum(axis=1) == pytest.approx(np.ones(63), abs=1e-6)
 
 
@@ -276,7 +276,10 @@ def test_app_liest_das_foto_von_selbst(monkeypatch):
     at = app_mit_foto(monkeypatch, wahrheit)
     zeilen = at.session_state["pf_zeilen"]
     assert zeilen[0][:2] == ["e4", "e5"] and zeilen[16][0] in ("Rd8#", "Td8#")
-    assert any(s.value.startswith("Datenbanktauglich") for s in at.success)
+    m = {x.label: x.value for x in at.metric}
+    assert m["Regelverstöße"] == "0" and m["unklar"] == "0" and m["in Ordnung"] == "33"
+    # Der simulierte Erkenner lässt bei Zügen wie d6 etwas Wahrscheinlichkeit für Bd6 übrig: Das Bild gilt dann als nicht ganz sicher, also Warnung statt „Datenbanktauglich“
+    assert any(s.value.startswith("Datenbanktauglich") for s in at.success) or any(w.value.startswith("Regelkonform, aber") for w in at.warning)
     assert at.session_state["pf_bewerter"] is not None and at.session_state["pf_auto_id"] == "test-1"
     assert any("entschlüsselt" in str(s.label) for s in at.status) or at.session_state["pf_entschluesselt"]
     assert not [b for b in at.button if b.label == "Zellen lesen"], "kein eigener Lese-Knopf mehr"
@@ -325,3 +328,18 @@ def test_app_ungueltiger_ausschnitt(monkeypatch):
     at.slider(key="pf_r_links").set_value(80).run()
     at.slider(key="pf_r_rechts").set_value(20).run()
     assert not at.exception and any("ungültig" in w.value for w in at.warning)
+
+
+def test_app_korrektur_uebernehmen_und_weiter_suchen(monkeypatch):
+    at = app_mit_foto(monkeypatch, {i: s for i, s in enumerate(OPER)}, unsicher=0.08, falsch=0.04)
+    assert at.session_state["pf_dekodierer"] is not None and at.session_state["pf_fest"] == {}
+    knopf = next(b for b in at.button if b.label.startswith("Korrekturen übernehmen"))
+    assert "0 geändert" in knopf.label
+    auto = [list(r) for r in at.session_state["pf_auto_zeilen"]]
+    # AppTest behält eine eingespielte Tabellenänderung nur für einen Lauf: Änderung und Klick im selben Lauf
+    at.session_state[f"pf_editor_{at.session_state['pf_v']}"] = {"edited_rows": {2: {"Schwarz": "Sc6"}}, "added_rows": [], "deleted_rows": []}
+    knopf.click().run()
+    assert not at.exception, [e.value for e in at.exception]
+    assert at.session_state["pf_fest"] == {5: "Sc6"} and at.session_state["pf_zeilen"][2][1] == "Sc6" and at.session_state["pf_auto_zeilen"] != auto
+    assert 5 not in at.session_state["pf_unsicher"], "eine bestätigte Zelle zeigt keinen Zweifel mehr"
+    assert at.session_state["pf_zeilen"][0][:2] == ["e4", "e5"], "Zellen vor der Korrektur bleiben"

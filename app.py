@@ -8,6 +8,7 @@ prüft jeden Zug gegen die Regeln und sagt bei Unklarheiten und Regelverstößen
 Lauffähig mit: streamlit run app.py
 """
 import io
+import time
 
 import pandas as pd
 import streamlit as st
@@ -87,7 +88,7 @@ def _bild_laden(foto) -> Image.Image:
 
 
 def _bild_vergessen() -> None:
-    for k in ("pf_bild", "pf_bild_id", "pf_auto_id", "pf_bewerter", "pf_entschluesselt"):
+    for k in ("pf_bild", "pf_bild_id", "pf_auto_id", "pf_bewerter", "pf_entschluesselt", "pf_dekodierer", "pf_fest", "pf_unsicher", "pf_auto_zeilen", "pf_folge_ab"):
         st.session_state.pop(k, None)
 
 
@@ -121,20 +122,53 @@ def _raster_automatisch(bild: Image.Image) -> None:
         s["pf_r_nr"], s["pf_r_weiss"], s["pf_r_schwarz"] = (max(1, round(100 * x)) for x in raster.spalten)
 
 
-def _entschluesseln() -> None:
-    """Strahlsuche über die gelesenen Zellen (pf_lesen.dekodiere); die Tabelle zeigt danach den besten legalen Verlauf in der Schreibweise des Formulars."""
-    bewerter = st.session_state.get("pf_bewerter")
+def _entschluesseln(neu: bool = True) -> None:
+    """Strahlsuche über die gelesenen Zellen (`pf_lesen.Dekodierer`); die Tabelle zeigt danach den besten legalen Verlauf in der Schreibweise des Formulars.
+    `neu=False`: mit dem Gedächtnis der letzten Suche und den bestätigten Zellen (`pf_fest`) nur ab der ersten geänderten Zelle neu suchen."""
+    s = st.session_state
+    bewerter = s.get("pf_bewerter")
     if bewerter is None:
         return
-    entscheidungen = LS.dekodiere(bewerter.lesung)
+    if neu or s.get("pf_dekodierer") is None:
+        s["pf_dekodierer"], s["pf_fest"] = LS.Dekodierer(bewerter.lesung), {}
+    d, fest = s["pf_dekodierer"], s["pf_fest"]
+    start = time.time()
+    entscheidungen = d.lauf(fest)
+    if d.gescheitert is not None:
+        s["pf_entschluesselt"] = (f"Die bestätigte Zelle im Zug {d.gescheitert // 2 + 1} passt zu keiner regelkonformen Partie mit den Zellen davor. "
+                                  "Prüfe sie, oder korrigiere eine frühere Zelle und suche noch einmal.")
+        return
     if not entscheidungen:
-        st.session_state["pf_entschluesselt"] = "Es gab keine lesbaren Zellen zum Entschlüsseln."
+        s["pf_entschluesselt"] = "Es gab keine lesbaren Zellen zum Entschlüsseln."
         return
     zellen = ["" if i >= len(entscheidungen) else L.in_schreibweise(entscheidungen[i].san, "de") for i in range(2 * ((len(entscheidungen) + 1) // 2))]
-    _zeilen_setzen([[zellen[i], zellen[i + 1]] for i in range(0, len(zellen), 2)])
-    unsicher = sum(1 for e in entscheidungen if e.wahrscheinlichkeit < 0.9)
-    st.session_state["pf_entschluesselt"] = (f"Strahlsuche: {len(entscheidungen)} Halbzüge eingetragen, davon {unsicher} mit weniger als 90 % Anteil unter den Hypothesen. "
-                                              "Das sind Vorschläge; die Zahl ist nur ein Anhaltspunkt, denn das Modell ist oft überzuversichtlich. Prüfe jede Zelle gegen das Foto.")
+    zeilen = [[zellen[i], zellen[i + 1]] for i in range(0, len(zellen), 2)]
+    _zeilen_setzen(zeilen)
+    s["pf_auto_zeilen"] = [list(r) for r in s["pf_zeilen"]]
+    s["pf_unsicher"] = {e.ply: e for e in entscheidungen if e.unsicher() and e.ply not in fest}
+    s["pf_folge_ab"] = LS.folgefehler_ab([e.ply in s["pf_unsicher"] for e in entscheidungen])
+    s["pf_entschluesselt"] = (f"Strahlsuche: {len(entscheidungen)} Halbzüge eingetragen, {len(s['pf_unsicher'])} davon sind nach dem Bild unsicher (Spalte „Bild“ in der Prüfung)"
+                              + (f"; {len(fest)} Zelle(n) bestätigt" if fest else "") + f" ({time.time() - start:.0f} s). Das sind Vorschläge: Korrigiere falsche Zellen in der Tabelle und suche weiter.")
+
+
+def _korrekturen() -> dict[int, str]:
+    """Zellen, die Du in der Tabelle gegenüber dem letzten Suchergebnis geändert hast (Halbzug -> Text); leere Zellen zählen nicht."""
+    s = st.session_state
+    alt = s.get("pf_auto_zeilen") or []
+    out = {}
+    for i, zeile in enumerate(s["pf_zeilen"]):
+        for j, text in enumerate(zeile):
+            vorher = alt[i][j] if i < len(alt) else ""
+            if text.strip() and text.strip() != vorher.strip():
+                out[2 * i + j] = text.strip()
+    return out
+
+
+def _nachsuchen() -> None:
+    """Die geänderten Zellen gelten ab jetzt als bestätigt; gesucht wird nur ab der ersten von ihnen neu."""
+    s = st.session_state
+    s["pf_fest"] = {**s.get("pf_fest", {}), **_korrekturen()}
+    _entschluesseln(neu=False)
 
 
 def _entzerrung_verwerfen() -> None:
@@ -253,6 +287,17 @@ with st.expander("Gelesene Züge als Tabelle (zum Korrigieren)", expanded=foto i
         bearbeitet = st.data_editor(basis, key=f"pf_editor_{st.session_state['pf_v']}", num_rows="dynamic", width="stretch", height=420,
                                     column_config={"Weiß": st.column_config.TextColumn("Weiß"), "Schwarz": st.column_config.TextColumn("Schwarz")})
         st.session_state["pf_zeilen"] = [["" if pd.isna(w) else str(w), "" if pd.isna(s) else str(s)] for w, s in bearbeitet.itertuples(index=False)]
+        if st.session_state.get("pf_dekodierer") is not None:
+            geaendert = _korrekturen()
+            if st.button(f"Korrekturen übernehmen und weiter suchen ({len(geaendert)} geändert)", type="primary" if geaendert else "secondary", key="pf_nachsuchen",
+                         help="Die geänderten Zellen gelten als bestätigt. Die Suche setzt bei der ersten von ihnen neu an (die Zellen davor bleiben, die Suche ist daher schneller als die erste) "
+                              "und passt die Folgezüge an: Ein richtiger Zug macht oft die Zellen dahinter eindeutig."):
+                if geaendert:
+                    with st.spinner("Suche weiter …"):
+                        _nachsuchen()
+                    st.rerun()
+                else:
+                    st.caption("Keine Zelle geändert: Ändere in der Tabelle eine falsch gelesene Zelle, dann suche weiter.")
     if rechts is not None:
         with rechts:
             st.image(foto.getvalue(), caption="Dein Formular, wie es bei der App angekommen ist (zum Vergrößern auf das Bild klicken)", width="stretch")
@@ -327,14 +372,27 @@ if not p.zuege:
     st.info("Noch keine Züge. Übernimm oben ein Foto, dann läuft alles von selbst.")
 else:
     regelverstoesse = z["illegal"] + z["nach_ende"]
-    m = st.columns(5)
+    unsicher_bild = {ply: e for ply, e in (st.session_state.get("pf_unsicher") or {}).items()
+                     if ply < len(p.zuege) and st.session_state["pf_zeilen"][ply // 2][ply % 2] == st.session_state["pf_auto_zeilen"][ply // 2][ply % 2]}
+    m = st.columns(6 if st.session_state.get("pf_unsicher") is not None else 5)
     m[0].metric("Halbzüge gelesen", p.halbzuege)
     m[1].metric("in Ordnung", z["ok"] + z["hinweis"], help="Genau ein legaler Zug passt. Davon sind so viele bereinigt: " + str(z["hinweis"]))
     m[2].metric("unklar", z["unklar"], help="Mehrere legale Züge passen, ein Zeichen ist unleserlich oder ein Zug fehlt.")
     m[3].metric("Regelverstöße", regelverstoesse, help="Kein legaler Zug passt, oder ein Zug steht nach dem Ende der Partie.")
     m[4].metric("nicht prüfbar", z["nicht_pruefbar"], help="Steht hinter einem Regelverstoß: die Stellung ist ab dort unbekannt.")
+    if len(m) == 6:
+        m[5].metric("unsicher (Bild)", len(unsicher_bild), help="Das Bild der Zelle sieht den gewählten Zug nicht klar vor den anderen legalen Zügen (Anteil unter 95 %). Die Zuversicht der Suche allein ist zu hoch, deshalb zählt das Bild.")
     befunde = P.ergebnis_befunde(p, G.normiere_ergebnis(kopf_roh.get("Result", ""))) + p.befunde
-    if p.datenbanktauglich():
+    if unsicher_bild:
+        erste = min((e for e in unsicher_bild.values() if e.passt_schlecht()), key=lambda e: e.ply, default=min(unsicher_bild.values(), key=lambda e: e.ply))
+        folge = st.session_state.get("pf_folge_ab")
+        st.info(f"**Von oben nach unten prüfen:** Fehler ziehen spätere Züge mit. Beginne bei {erste.ply // 2 + 1}. {'Weiß' if erste.ply % 2 == 0 else 'Schwarz'} "
+                f"(Bild: {formular_san(erste.san)} {pct(erste.zellanteil, 0)}" + "".join(f", {formular_san(s)} {pct(a, 0)}" for s, a in erste.bild_alternativen[:2] if a >= 0.02) + "). "
+                + (f"Ab dem {folge // 2 + 1}. Zug häufen sich unsichere Zellen: Dort ist vermutlich ein früherer Fehler die Ursache, und die Züge danach sind oft alle falsch. " if folge is not None else "")
+                + "Korrigiere die Zelle in der Tabelle, dann „Korrekturen übernehmen und weiter suchen“.")
+    if p.datenbanktauglich() and unsicher_bild:
+        st.warning(f"Regelkonform, aber {len(unsicher_bild)} Zelle(n) sind nach dem Bild unsicher (Spalte „Bild“). Die Regeln lassen in diesen Stellungen auch andere Züge zu: Prüfe sie gegen das Foto, bevor Du das PGN benutzt.")
+    elif p.datenbanktauglich():
         st.success(f"Datenbanktauglich: alle {p.halbzuege} Halbzüge sind regelkonform und eindeutig" + (f", die Partie endet mit {'Matt' if p.ende == 'matt' else 'Patt' if p.ende == 'patt' else 'Remis'}." if p.ende else "."))
     elif regelverstoesse or z["nicht_pruefbar"]:
         st.error("Mindestens ein Zug verstößt gegen die Regeln. Die Prüfung stoppt dort; alles dahinter ist erst nach dem Beheben prüfbar.")
@@ -347,21 +405,29 @@ else:
     for b in infos:
         st.caption(f"{C.STUFE_ICON['info']} {b.text}")
 
+    st.toggle("Nur Auffälliges zeigen", key="pf_nur_auffaellig", help="Blendet Zellen aus, die in Ordnung und nach dem Bild sicher sind.")
     zeilen_tab = []
     for e in p.zuege:
-        if st.session_state.get("pf_nur_auffaellig") and e.status in ("ok", "ergebnis", "leer"):
+        if st.session_state.get("pf_nur_auffaellig") and e.status in ("ok", "ergebnis", "leer") and e.ply not in unsicher_bild:
             continue
         icon, wort = C.STATUS[e.status]
         hinweis = " · ".join(x.text for x in e.meldungen if x.stufe != "info" or e.status in ("hinweis", "unklar"))
-        zeilen_tab.append({"Zug": e.beschriftung, "Formular": e.roh.strip() or "(leer)", "Geprüft (SAN)": e.san, "Status": f"{icon} {wort}", "Hinweis": hinweis, "_s": e.status})
+        eintrag = {"Zug": e.beschriftung, "Formular": e.roh.strip() or "(leer)", "Status": f"{icon} {wort}"}
+        if st.session_state.get("pf_unsicher") is not None:
+            u = unsicher_bild.get(e.ply)
+            eintrag["Bild"] = ("✗ passt schlecht" if u.passt_schlecht() else "⚠ unsicher") if u else ""
+            if u:
+                sonst = ", ".join(f"{formular_san(s)} {pct(a, 0)}" for s, a in u.bild_alternativen if a >= 0.02)
+                hinweis = (hinweis + " · " if hinweis else "") + f"Bild: {formular_san(u.san)} nur {pct(u.zellanteil, 0)}" + (f", sonst {sonst}" if sonst else "")
+        eintrag.update({"Hinweis": hinweis, "_s": e.status})
+        zeilen_tab.append(eintrag)
     if zeilen_tab:
         df = pd.DataFrame(zeilen_tab)
         stile = df["_s"].map(C.FARBEN)
         sichtbar = df.drop(columns="_s")
         st.dataframe(sichtbar.style.apply(lambda r: [f"background-color: {stile[r.name]}"] * len(r), axis=1), hide_index=True, width="stretch",
                      height=min(38 * (len(sichtbar) + 1) + 2, 460))
-        st.caption("Grün: in Ordnung · Blau: genau ein Zug passt, die Schreibweise wurde bereinigt · Gelb: unklar, vorläufig gewählt · Rot: Regelverstoß · Grau: nicht prüfbar. "
-                   "SAN ist die internationale Notation des PGN (S heißt dort N, L = B, T = R, D = Q).")
+        st.caption("Grün: in Ordnung · Blau: genau ein Zug passt, die Schreibweise wurde bereinigt · Gelb: unklar, vorläufig gewählt · Rot: Regelverstoß · Grau: nicht prüfbar.")
     else:
         st.caption("Alle Zellen sind in Ordnung.")
 

@@ -157,3 +157,79 @@ def test_dekodiere_behaelt_das_matt_auch_wenn_danach_eine_leere_aussehende_zelle
         zellen.append(LS.ZellLesung(ply, False, san, logp))
     ent = LS.dekodiere(LS.FormularLesung(zellen), strahl=50)
     assert [e.san for e in ent] == partie
+
+
+def _zelle(ply, san, alternativ=None, breite=10):
+    """Zellbild als Verteilung: Zeichen von `san`; steht `alternativ` daneben, teilen sich beide Schreibweisen jede abweichende Stelle zur Hälfte."""
+    import pf_ctc as C
+
+    a = C.kodiere(san)
+    b = C.kodiere(alternativ) if alternativ else a
+    logp = np.full((breite, len(C.ZEICHEN)), -9.0)
+    for t in range(breite):
+        if t < len(a):
+            if a[t] == b[t]:
+                logp[t, a[t]] = -0.05
+            else:
+                logp[t, a[t]] = logp[t, b[t]] = -0.7
+        else:
+            logp[t, 0] = -0.05
+    return LS.ZellLesung(ply, False, san, logp)
+
+
+PARTIE = ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6"]
+
+
+def _lesung_mit_zweifel():
+    zellen = [_zelle(i, s) for i, s in enumerate(PARTIE)]
+    zellen[3] = _zelle(3, "Nc6", "Nf6")                          # Zelle 3: das Bild kann Nc6 oder Nf6 sein
+    return LS.FormularLesung(zellen)
+
+
+def test_unsichere_zelle_wird_markiert_sichere_nicht():
+    ent = LS.dekodiere(_lesung_mit_zweifel(), strahl=50)
+    assert [e.unsicher() for e in ent] == [False, False, False, True, False, False]
+    assert ent[3].zellanteil == pytest.approx(0.5, abs=0.05) and ent[3].bild_alternativen[0][0] in ("Nf6", "Nc6")
+    assert all(e.zellanteil > 0.95 for i, e in enumerate(ent) if i != 3)
+
+
+def test_passt_schlecht_wenn_der_zug_nicht_zum_bild_passt():
+    partie = ["e4", "e6", "Qh5", "Nc6", "Qxe5+"]                  # Zelle 1 zeigt e6, aber Qxe5+ gibt es nur, wenn Schwarz e5 gezogen hat
+    zellen = [_zelle(i, s) for i, s in enumerate(partie)]
+    ent = LS.dekodiere(LS.FormularLesung(zellen), strahl=50, strafdeckel=2.0)
+    assert ent[1].san == "e5" and ent[1].passt_schlecht() and not ent[0].passt_schlecht()
+
+
+def test_bestaetigte_zelle_entscheidet_und_der_rest_folgt():
+    les = _lesung_mit_zweifel()
+    ent = LS.dekodiere(les, strahl=50, fest={3: "Sf6"})            # deutsche Schreibweise, wie sie auf dem Formular steht
+    assert [e.san for e in ent][3] == "Nf6"
+    assert not ent[3].unsicher() or ent[3].zellanteil < 0.95       # die Zelle selbst bleibt im Ergebnis, sie wird nur nicht mehr als Zweifel gezeigt (das macht die App)
+
+
+def test_nachsuche_mit_gedaechtnis_gibt_dasselbe_wie_eine_neue_suche():
+    les = _lesung_mit_zweifel()
+    d = LS.Dekodierer(les, strahl=50)
+    erste = [e.san for e in d.lauf()]
+    zweite = [e.san for e in d.lauf({3: "Nf6"})]
+    frisch = [e.san for e in LS.dekodiere(les, strahl=50, fest={3: "Nf6"})]
+    assert zweite == frisch and zweite[3] == "Nf6" and erste[:3] == zweite[:3]
+    assert len(d.strahlen) == len(PARTIE) + 1
+    zurueck = [e.san for e in d.lauf({})]                          # Bestätigung wieder weg: wie die erste Suche
+    assert zurueck == erste
+
+
+def test_bestaetigte_zelle_ohne_passenden_zug_meldet_scheitern():
+    d = LS.Dekodierer(_lesung_mit_zweifel(), strahl=50)
+    d.lauf({2: "Sc3"})                                             # nach 1. e4 e5 geht Sc3, nach 3. ... aber Nf3 verlangen die Folgezellen nicht: lauf bleibt gültig
+    assert d.gescheitert is None
+    d.lauf({0: "Dh5"})                                             # im ersten Zug gibt es kein Dh5
+    assert d.gescheitert == 0
+
+
+def test_folgefehler_zone():
+    assert LS.folgefehler_ab([False] * 20) is None
+    assert LS.folgefehler_ab([False] * 5 + [True] * 10) == 5       # Beginn der Kette = erste unsichere Zelle
+    einzeln = [False, True, False, False, True, False, False, False, False, False]
+    assert LS.folgefehler_ab(einzeln) is None                      # einzelne Zweifel sind keine Kette
+    assert LS.folgefehler_ab([True, True, True]) is None           # zu wenige Zellen, um von einer Kette zu sprechen

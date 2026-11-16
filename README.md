@@ -14,6 +14,7 @@ Lauffähig mit: `streamlit run app.py`
 * **Foto:** Die Auswahl erscheint erst nach einer Bestätigung zum Datenschutz. Die Datei wird nur im Browser gelesen, Namen schwärzt Du dort; danach läuft alles automatisch (Raster, Zellen lesen, Partie suchen). Kopfdaten für das PGN sind optional.
 * **Prüfung:** Jede Zelle bekommt einen Status: in Ordnung, bereinigt (genau ein Zug passt, die Schreibweise wurde geglättet), unklar, Regelverstoß oder nicht prüfbar (hinter einem Regelverstoß).
   Dazu eine Meldung zu jedem Fund, eine Tabelle mit Farben und, bei jeder Problemstelle, das Brett vor dem Zug mit den Kandidaten als Pfeilen.
+* **Markieren und weitersuchen:** Unsichere Zellen stehen mit „⚠ unsicher“ oder „✗ passt schlecht“ in der Prüfung, ein Hinweis nennt die erste Zelle zum Prüfen und den Beginn einer Fehlerkette. Korrigierte Zellen gelten als bestätigt, die Suche läuft ab dort neu.
 * **Nacharbeit:** Vorschläge übernehmen (der Zug wird in der Schreibweise des Formulars in die Zelle geschrieben, auf einem deutschen Formular also mit S, L, T, D), die Zelle selbst ändern, einen legalen Zug aus der Liste wählen, bei einem Zug nach dem Ende die Zellen leeren.
   Die gelesenen Züge stehen in einer Tabelle, die Du direkt ändern kannst; die Prüfung läuft sofort neu.
 * **PGN:** sieben Pflichtzeilen in Standardreihenfolge, Zugnummern, Zeilen bis 80 Zeichen, Bewertungszeichen als NAG. Ist alles geklärt: das PGN. Sonst die Wahl zwischen einem Teil-PGN (nur gesicherte Züge) und einem vorläufigen PGN (gewählte Vorschläge, unklare Stellen als Kommentar).
@@ -95,13 +96,28 @@ Der Finder oben (Hough-Verfahren auf senkrechten Linien) scheitert dort und gibt
 Die Zellbereinigung (Papierton abziehen, gedruckte Linien löschen, Schrift aufrichten, `pf_raster.bereinige_zelle`) ist eingebaut, aber aus: Sie verbesserte das Lesen mit dem jetzigen Modell nicht.
 
 **Strahlsuche über die ganze Partie** (`pf_lesen.dekodiere`): Statt jede Zelle für sich zu lesen, bewertet die App Zugfolgen. Jede Hypothese ist eine legale Zugfolge, ihre Punktzahl ist die Summe der Logwahrscheinlichkeiten, mit denen das Bild jeder Zelle zum Zug passt,
-und es bleiben die 300 besten Hypothesen je Halbzug. Ein falsch gelesener Zug, nach dem die Folgezellen nicht mehr passen, verliert so gegen den richtigen. Der **Strafdeckel** (12 in der Logwahrscheinlichkeit) begrenzt den Abzug für eine Zelle:
+und es bleiben die 100 besten Hypothesen je Halbzug. Ein falsch gelesener Zug, nach dem die Folgezellen nicht mehr passen, verliert so gegen den richtigen. Der **Strafdeckel** (12 in der Logwahrscheinlichkeit) begrenzt den Abzug für eine Zelle:
 Kein Zug wird in einer Stellung um mehr als diesen Wert schlechter gewertet als der beste Zug dort, damit eine unleserliche Zelle die Partie nicht abbricht. Eine beendete Partie (Matt, Patt) bleibt im Rennen und zahlt für weitere Zellen nur, was die Zelle als leer unwahrscheinlich ist.
 
+**Korrigieren und weitersuchen** (`pf_lesen.Dekodierer`): Du änderst eine falsch gelesene Zelle in der Tabelle und startest die Nachsuche. Die geänderten Zellen gelten als bestätigt: Dort zählen nur Züge, die zum Text passen (`pf_pruefung.passende`), und die Zelle kostet nichts.
+Die Suche merkt sich die Strahlen aller Halbzüge und setzt bei der ersten geänderten Zelle neu an; die legalen Züge je Stellung und die Bildwerte je Zug werden ebenfalls gemerkt. Ein richtiger Zug macht oft die Zellen dahinter eindeutig.
+Der Strahl hat 100 statt 300 Hypothesen: Das ist etwa doppelt so schnell und kostet am Scan unten 2 richtige Halbzüge (bei 50 sind es nur 29).
+
+**Markierung unsicherer Zellen:** Die Anteile der Hypothesen am Ende der Suche sind überzuversichtlich (siehe Messung) und taugen nicht zum Markieren. Die App nimmt zwei Maße aus dem Bild der Zelle: den **Zellanteil** (Anteil des gewählten Zugs unter allen legalen Zügen der Stellung, wenn nur diese Zelle zählt;
+unter 0,95 heißt „⚠ unsicher“) und die **Passung** (log-Wahrscheinlichkeit des Zugs zum Bild minus die des wahrscheinlichsten Zeichenpfads; unter −3 heißt „✗ passt schlecht“). Die Schwellen sind an einem einzigen Scan gewählt. Die Spalte „Bild“ der Prüfung zeigt die Stufe, der Hinweis die Alternativen mit ihren Anteilen,
+und „Datenbanktauglich“ erscheint nur, wenn keine Zelle als unsicher markiert ist.
+
+**Folgefehler:** Spätere Fehler sind oft Folgen früherer: Nach einem falschen Zug stimmt die Stellung nicht mehr, und die Zellen dahinter passen schlecht oder werden ebenfalls falsch entschieden. Die App sucht die erste unsichere Zelle einer Kette (mindestens drei Viertel von acht Zellen unsicher, `pf_lesen.folgefehler_ab`)
+und sagt: Ab hier ist vermutlich ein früherer Fehler die Ursache. Sie bittet, von oben nach unten zu korrigieren, und beginnt bei der ersten Zelle, die schlecht passt (sonst der ersten unsicheren).
+
 **Messung an einem eigenen Scan** (`data/messung_eigener_scan.json`, nur Summenzahlen; Bild und Züge sind privat und nicht im Repository): ein Ligaformular mit 95 Halbzügen in Bleistift-Schreibschrift auf gelbem Papier, drei Blöcke zu 20 Zeilen ohne senkrechte Linien, das Modell hat solche Schrift nicht gesehen.
-Das Raster wird richtig gefunden. Der gierig gelesene Text stimmt in 10 von 95 Zellen ganz; die Strahlsuche setzt 39 von 95 Halbzügen richtig (41 %), der erste Fehler liegt bei Halbzug 16, und ab dort ziehen frühe Fehler spätere Züge mit.
-Die Zuversicht der Strahlsuche ist zu hoch: 84 Halbzüge haben mindestens 90 % Anteil unter den Hypothesen, aber nur 38 davon sind richtig. Lesen und Strahlsuche brauchten 7 und 34 Sekunden (ein Rechner, ein Lauf).
-Für Schrift dieser Art reicht das Modell also nicht; eine Prüfung jeder Zelle gegen das Foto bleibt nötig. Ein Nachtraining auf der eigenen Handschrift wäre der Hebel, ist aber nicht gemacht.
+Das Raster wird richtig gefunden. Der gierig gelesene Text stimmt in 10 von 95 Zellen ganz; die Strahlsuche setzt 37 von 95 Halbzügen richtig (39 %), der erste Fehler liegt bei Halbzug 16.
+Vor dem ersten Fehler ist kein Halbzug falsch (0), danach 58 von 79: ein Hinweis auf Folgefehler.
+Die Zuversicht der Suche ist zu hoch: 88 Halbzüge haben mindestens 90 % Anteil unter den Hypothesen, aber nur 36 davon sind richtig. Mit den Bildmaßen: 75 Halbzüge sind als unsicher markiert, darunter 52 der 58 falschen (6 falsche bleiben unmarkiert);
+16 Halbzüge passen schlecht, 15 davon sind falsch. Die Kette unsicherer Zellen beginnt bei Halbzug 22.
+Bestätigt man immer die erste falsche Zelle und sucht neu, ist die Partie nach 25 Korrekturen fehlerfrei; die Nachsuche braucht im Mittel 2,6 und höchstens 6,8 Sekunden.
+Lesen und erste Suche brauchten 6 und 10 Sekunden (ein Rechner, ein Lauf; mit 300 Hypothesen dauerte die Suche 22 statt 10 Sekunden).
+Für Schrift dieser Art reicht das Modell also nicht; die Korrekturrunde ersetzt das Nachlesen jeder Zelle nicht, hilft aber, mit den Markierungen am Anfang der Kette zu beginnen. Ein Nachtraining auf der eigenen Handschrift wäre der Hebel, ist aber nicht gemacht.
 
 Der Weg vom Bild zum Zug hat zwei Teile, die in der Prüfung zusammenlaufen:
 
@@ -213,7 +229,7 @@ Das Raster ist der empfindlichste Teil: Mit der alten Voreinstellung lag nur etw
 
 ## Bewusst nicht enthalten
 
-* **Verlässlich Handschrift lesen.** „Foto lesen“ ist ein Gerüst mit einem kleinen Modell: Auf Blättern fremder Schreiber liest es etwa 6 von 10 Zellen ganz richtig, und echte deutsche Ligabögen hat es nie gesehen (deutsche Buchstaben kennt es aus eingesetzten Handschrift-Buchstaben und Schriften). An einem eigenen Ligaformular in Bleistift-Schreibschrift setzt die Strahlsuche 39 von 95 Halbzügen richtig (siehe oben); auf anderen Formularen ist es nicht gemessen. Das Raster findet die App nur bei gedruckten Zeilenlinien.
+* **Verlässlich Handschrift lesen.** „Foto lesen“ ist ein Gerüst mit einem kleinen Modell: Auf Blättern fremder Schreiber liest es etwa 6 von 10 Zellen ganz richtig, und echte deutsche Ligabögen hat es nie gesehen (deutsche Buchstaben kennt es aus eingesetzten Handschrift-Buchstaben und Schriften). An einem eigenen Ligaformular in Bleistift-Schreibschrift setzt die Strahlsuche 37 von 95 Halbzügen richtig (siehe oben); auf anderen Formularen ist es nicht gemessen. Das Raster findet die App nur bei gedruckten Zeilenlinien.
 * **Varianten, Kommentare, Uhrzeiten** des Formulars. Text mit Klammern wird gelesen, die Klammern gehen verloren (mit Hinweis).
 * **Andere Ausgangsstellungen:** nur die normale Grundstellung, kein Schach960, keine Partie ab FEN.
 * **Mehrere Fehler auf einmal.** Die Auflösung der Unklarheiten ist für eine einzelne Störung gemessen. Gibt es mehrere, stehen die Kandidaten trotzdem da, aber die Fortsetzung kann sich an einer zweiten Störung totlaufen; ein Regelverstoß stoppt die Prüfung, bis er behoben ist.

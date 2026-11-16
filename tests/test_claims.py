@@ -226,9 +226,21 @@ def test_messung_eigener_scan_steht_in_der_readme():
     """Nur Summenzahlen eines privaten Scans (Bild und Züge sind nicht im Repository): jede Zahl der README aus data/messung_eigener_scan.json."""
     m = json.loads((WURZEL / "data" / "messung_eigener_scan.json").read_text(encoding="utf-8"))
     n = m["halbzuege_wahrheit"]
+    komma = lambda x: str(x).replace(".", ",")  # noqa: E731
     assert f"Der gierig gelesene Text stimmt in {m['zellen_gierig_exakt']} von {n} Zellen ganz" in README
     assert f"die Strahlsuche setzt {m['strahlsuche_richtig']} von {n} Halbzügen richtig ({round(100 * m['strahlsuche_richtig'] / n)} %)" in README
     assert f"der erste Fehler liegt bei Halbzug {m['erster_fehler_halbzug']}" in README
+    assert f"Vor dem ersten Fehler ist kein Halbzug falsch ({m['vor_erstem_fehler_falsch']}), danach {m['nach_erstem_fehler_falsch']} von {m['nach_erstem_fehler_zellen']}" in README
     assert f"{m['sicher_ab_90_prozent']} Halbzüge haben mindestens 90 % Anteil" in README and f"nur {m['sicher_davon_richtig']} davon sind richtig" in README
-    assert f"{m['sekunden_lesen']} und {m['sekunden_strahlsuche']} Sekunden" in README
-    assert m["strahlsuche_halbzuege"] == n and m["sicher_davon_richtig"] <= m["sicher_ab_90_prozent"]
+    assert f"{m['unsicher_markiert']} Halbzüge sind als unsicher markiert, darunter {m['unsicher_davon_falsch']} der {m['falsch_gesamt']} falschen ({m['falsch_ohne_markierung']} falsche bleiben unmarkiert)" in README
+    assert f"{m['schlecht_markiert']} Halbzüge passen schlecht, {m['schlecht_davon_falsch']} davon sind falsch" in README
+    assert f"Die Kette unsicherer Zellen beginnt bei Halbzug {m['folgefehler_ab_halbzug']}" in README
+    assert f"nach {m['korrekturen_bis_fehlerfrei']} Korrekturen fehlerfrei" in README
+    assert f"im Mittel {komma(m['sekunden_nachsuche_mittel'])} und höchstens {komma(m['sekunden_nachsuche_max'])} Sekunden" in README
+    assert f"brauchten {m['sekunden_lesen']} und {m['sekunden_erste_suche']} Sekunden" in README
+    assert f"mit 300 Hypothesen dauerte die Suche {m['strahl_300_sekunden']} statt {m['strahl_100_sekunden']} Sekunden" in README
+    assert f"kostet am Scan unten {m['strahl_300_richtig'] - m['strahlsuche_richtig']} richtige Halbzüge (bei 50 sind es nur {m['strahl_50_richtig']})" in README
+    assert f"setzt die Strahlsuche {m['strahlsuche_richtig']} von {n} Halbzügen richtig (siehe oben)" in README
+    assert m["strahl"] == 100 and m["falsch_gesamt"] == n - m["strahlsuche_richtig"]
+    assert m["unsicher_davon_falsch"] + m["falsch_ohne_markierung"] == m["falsch_gesamt"]
+    assert m["vor_erstem_fehler_falsch"] + m["nach_erstem_fehler_falsch"] == m["falsch_gesamt"]
