@@ -4,5 +4,3 @@ numpy>=1.26
 pillow>=10.1
 # nur für „Foto lesen“; die App läuft ohne, dann bleibt die Tabelle zum Abtippen:
 onnxruntime>=1.18
-# nur für „Mit einem Vision-Modell lesen“ (eigener API-Schlüssel des Nutzers):
-anthropic>=1.0

@@ -22,7 +22,6 @@ import pf_logik as L
 import pf_pgn as G
 import pf_pruefung as P
 import pf_raster as R
-import pf_vision as LV
 from pf_notation import lese
 
 st.set_page_config(page_title="Partieformular → PGN – Sebastians Spielwiese", layout="wide")
@@ -197,7 +196,7 @@ kopf_roh = {k: st.session_state.get(f"kopf_{k}", "") for k in KOPF_FELDER}
 
 foto = st.file_uploader("Foto oder Scan des Formulars (optional)", type=["png", "jpg", "jpeg", "webp"], key="pf_foto",
                         help="Das Bild wird zum Server dieser App übertragen und liegt dort nur für diese Sitzung im Arbeitsspeicher. Es liegt neben der Tabelle zum Abtippen; im Tab „Foto lesen“ kann die App es lesen.")
-st.caption("**Datenschutz:** Ein hochgeladenes Foto geht an den Server, auf dem diese App läuft (bei der öffentlichen Fassung Streamlit Community Cloud). Die App speichert es nicht und gibt es nicht weiter, außer Du schaltest unten ausdrücklich das Vision-Modell zu. "
+st.caption("**Datenschutz:** Ein hochgeladenes Foto geht an den Server, auf dem diese App läuft (bei der öffentlichen Fassung Streamlit Community Cloud). Die App speichert es nicht und gibt es nicht weiter. "
            "Auf Formularen stehen Namen von Spielern: Lade nur Formulare hoch, bei denen die Spieler damit einverstanden sind, oder schneide die Kopfzeile mit den Namen vorher ab. Für den Betrieb der Plattform gilt deren eigene Datenschutzerklärung.")
 tab_tabelle, tab_text, tab_foto = st.tabs(["Zug für Zug", "Text einfügen", "Foto lesen"])
 with tab_tabelle:
@@ -296,40 +295,6 @@ with tab_foto:
                     st.session_state["pf_preset"] = None
                     st.session_state["pf_lese_info"] = f"{lesung.beschrieben()} beschriebene Zellen gelesen."
                     st.rerun()
-        with st.expander("🔎 Mit einem Vision-Modell lesen (Anthropic-API): für beliebige Handschriften, deutsche Buchstaben und andere Vorlagen"):
-            st.markdown(
-                "Ein Vision-Sprachmodell (Claude) liest auch fremde Handschriften, **deutsche Buchstaben (S, L, T, D)** und andere Formulare, und es liest die **gedruckten Zugnummern** mit, die die Zeilen eindeutig zuordnen. "
-                "Es schreibt nur ab und verbessert nichts; unleserliche Zeichen kommen als „?“. Danach prüft die App die Züge gegen die Regeln wie bei abgetipptem Text. "
-                "\n\n**Datenschutz:** Das Bild geht an Anthropic. Auf Formularen stehen Namen von Spielern. Ist das Raster gefunden und entzerrt, wird nur die Zugtabelle gesendet (ohne Kopfzeile), sonst das ganze Foto. "
-                "Der API-Schlüssel gehört Dir, steht nur in dieser Sitzung und wird nirgends gespeichert. Ein Formular kostet nach Größe des Bildes etwa einige Cent."
-            )
-            if not LV.sdk_vorhanden():
-                st.warning("Das Paket `anthropic` ist hier nicht installiert.")
-            st.text_input("API-Schlüssel (Anthropic)", type="password", key="pf_api_key",
-                          help="Leer lassen, wenn der Schlüssel in der Umgebungsvariable ANTHROPIC_API_KEY steht (lokaler Betrieb).")
-            st.checkbox("Mir ist klar, dass das Foto zur Auswertung an Anthropic gesendet wird, und die abgebildeten Spieler sind damit einverstanden.", key="pf_vision_ok")
-            schluessel = st.session_state.get("pf_api_key", "") or LV.schluessel_aus_umgebung()
-            bereit = LV.sdk_vorhanden() and bool(schluessel) and bool(st.session_state.get("pf_vision_ok"))
-            if st.button("Mit Vision-Modell lesen", disabled=not bereit, help="Sendet das Bild und trägt die gelesenen Züge in die Tabelle ein."):
-                with st.spinner("Das Modell liest das Formular …"):
-                    try:
-                        zeilen_v, hinweise_v = LV.lies_zeilen(bild, raster if entzerrt else None, schluessel)
-                    except LV.VisionFehler as fehler:
-                        st.error(str(fehler))
-                    else:
-                        if not zeilen_v:
-                            st.warning("Das Modell hat keine Züge gefunden.")
-                        else:
-                            _zeilen_setzen(zeilen_v)
-                            st.session_state.pop("pf_bewerter", None)
-                            st.session_state["pf_preset"] = None
-                            st.session_state["pf_vision_hinweise"] = hinweise_v
-                            st.session_state["pf_vision_info"] = f"{len(zeilen_v)} Zeilen vom Vision-Modell gelesen."
-                            st.rerun()
-            if st.session_state.get("pf_vision_info"):
-                st.success(st.session_state["pf_vision_info"] + " Unten prüft die App die Züge gegen die Regeln.")
-                for h in st.session_state.get("pf_vision_hinweise", []):
-                    st.caption(f"ℹ️ {h}")
         if st.session_state.get("pf_bewerter") is not None:
             st.success(st.session_state.get("pf_lese_info", "Zellen gelesen.") + " Der gelesene Text steht in der Tabelle; unsichere Zeichen sind „?“. Unten prüft die App ihn gegen die Regeln und das Bild.")
     if st.session_state.get("pf_bewerter") is None:

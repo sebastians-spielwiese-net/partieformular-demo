@@ -183,11 +183,6 @@ def test_trocr_vergleich_steht_in_der_readme():
     assert t["trocr_gestaucht"] <= 2 * (n // 8) and t["schach_plus_trocr"] <= t["schach_modell"] + 2         # TrOCR liegt im Bereich des Zufalls und verbessert nichts
 
 
-def test_vision_angaben_der_readme():
-    import pf_vision
-    assert f"`{pf_vision.MODELL}`" in README and f"höchstens {pf_vision.MAX_SEITE} Pixel je Seite" in README
-
-
 def test_glm_ocr_vergleich_steht_in_der_readme():
     def lade(name):
         return json.loads((WURZEL / "data" / f"{name}.json").read_text(encoding="utf-8"))

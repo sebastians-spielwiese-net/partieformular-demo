@@ -85,7 +85,7 @@ Partien in deutscher und englischer Schreibweise werden ohne Befund gelesen und 
 ## Foto lesen (Gerüst)
 
 Im Tab „Foto lesen“ findet die App das Raster des Formulars selbst, und ein Erkenner liest jede beschriebene Zelle. Das Raster lässt sich von Hand nachstellen (Ausschnitt, Drehung, Zeilen, Blöcke, Spaltenbreiten).
-**Datenschutz beim Hochladen:** Ein Foto geht an den Server, auf dem die App läuft (öffentliche Fassung: Streamlit Community Cloud) und liegt dort nur für die Sitzung im Arbeitsspeicher. Die App speichert es nicht und gibt es nicht weiter, außer der Nutzer schaltet das Vision-Modell zu (siehe unten). Auf Formularen stehen Namen von Spielern: nur Formulare hochladen, bei denen die Spieler einverstanden sind, oder die Kopfzeile vorher abschneiden. Für den Betrieb der Plattform gilt deren Datenschutzerklärung.
+**Datenschutz beim Hochladen:** Ein Foto geht an den Server, auf dem die App läuft (öffentliche Fassung: Streamlit Community Cloud) und liegt dort nur für die Sitzung im Arbeitsspeicher. Die App speichert es nicht und gibt es nicht weiter. Auf Formularen stehen Namen von Spielern: nur Formulare hochladen, bei denen die Spieler einverstanden sind, oder die Kopfzeile vorher abschneiden. Für den Betrieb der Plattform gilt deren Datenschutzerklärung.
 
 Der Weg vom Bild zum Zug hat zwei Teile, die in der Prüfung zusammenlaufen:
 
@@ -120,16 +120,6 @@ Ausgabe bereinigt: Zugnummer weg, Malzeichen zu x, Groß- und Kleinschreibung de
 An den 300 Zugbildern des Datensatzes liest GLM-OCR 115 (38,3 %) ganz richtig, die Zeichenfehlerrate liegt bei 47 %.
 In den ersten zwölf Proben fielen auf: `g` als `9` („Ng4“ → „N94“), `b` als `6`, `a` als `0` (nicht im ganzen Satz ausgewertet). Ein Allgemein-OCR-Modell kennt Schachnotation nicht und nutzt keinen Zeichensatz mit nur 28 Zeichen; ohne Nachtraining ist es für diese Aufgabe deutlich schlechter als das Schach-Modell, obwohl das auf HCS im Vorteil ist.
 Das Modell gibt außerdem nur Text aus, keine Wahrscheinlichkeiten: Die Bewertung der legalen Züge gegen das Bild fällt weg.
-
-**Vision-Modell für beliebige Spieler und Vorlagen** (`pf_vision.py`, optional): Formulare aus dem Ligabetrieb stammen von vielen Spielern, meist mit deutschen Buchstaben (S, L, T, D) und in verschiedenen Vorlagen. Das kleine Schach-Modell ist darauf nicht trainiert,
-und die Messungen oben gelten für seine Trainingsdaten. Deshalb gibt es als zweiten Weg ein Vision-Sprachmodell (Claude, `claude-opus-5-5`, über die Anthropic-API mit dem **eigenen Schlüssel des Nutzers**):
-
-* **Was es bringt:** Es liest fremde Handschriften und deutsche Buchstaben und liest die **gedruckten Zugnummern** mit. Damit ist die Zuordnung der Zeilen eindeutig; eine um eine Zeile verschobene Lage, die beim Schach-Modell unbemerkt blieb, fällt hier weg.
-* **Was es nicht tut:** Es schreibt ab, was dasteht, und verbessert nichts (die Anweisung verbietet das ausdrücklich); unleserliche Zeichen kommen als „?“. Danach prüft die App die Züge gegen die Regeln wie bei jedem abgetippten Text, mit Jokern, Fortsetzungstest und Vorschlägen.
-  Eine Bildwahrscheinlichkeit wie beim Schach-Modell gibt es hier nicht.
-* **Datenschutz:** Das Bild verlässt den Rechner. Ist das Raster gefunden, gehen nur die Blöcke der entzerrten Tabelle ohne Kopfzeile (also ohne Spielernamen) an die API, höchstens 1568 Pixel je Seite, sonst das ganze Foto. Die App verlangt vorher eine Bestätigung, dass die Spieler einverstanden sind. Der Schlüssel steht nur in der Sitzung oder in der Umgebungsvariable `ANTHROPIC_API_KEY`.
-* **Kosten:** je Foto nach Bildgröße und Antwortlänge, in der Größenordnung von einigen Cent bis zehn Cent. `tools/messung_vision.py` rechnet in der Trockenübung vorab aus, was eine Messung kostet.
-* **Nicht gemessen:** Es gibt keine Trefferquote, denn die Anfragen laufen nur mit einem Schlüssel des Nutzers (`python tools/messung_vision.py --ausfuehren`), und HCS enthält nur englische Notation. Die Anbindung ist mit einem Ersatz-Client getestet (Anfrage, Antwort, Fehler, Datenschutz), nicht gegen die echte API.
 
 **Raster und Perspektive** (`pf_entzerren.py`, nur numpy und Pillow, kein Erkenner nötig): Ein gedrucktes Formular hat viele gleich weit entfernte Linien. Die App markiert dunklere Punkte als ihre Umgebung (unabhängig von der Beleuchtung) und lässt sie auf Geraden abstimmen (Hough-Verfahren),
 getrennt für die linke und die rechte Bildhälfte, weil die Blöcke gegeneinander verschoben sein können. Die längste Folge gleichmäßig verteilter Linien ist das Zeilenraster (30 Zeilen, also 31 Linien; fehlt am Rand eine, wird sie ergänzt, am oberen Bildrand auch bei nur teilweise sichtbarer erster Zeile).
@@ -223,13 +213,13 @@ Das Raster ist der empfindlichste Teil: Mit der alten Voreinstellung lag nur etw
 * `test_pruefung.py`: Zufallspartien als Formular, Störungen, erfundene Züge, Begründungen, Fortsetzungstest, frühere Ursache.
 * `test_pgn.py`: Datum, Kopf, Zeilenumbruch, NAG, Text zu Zellen, Rundlauf.
 * `test_beispiele.py`: jedes Beispiel zeigt seinen Fall; `test_claims.py`: jede Zahl dieser README.
-* `test_ctc.py`, `test_raster.py`, `test_entzerren.py`, `test_lesen.py`, `test_vision.py`: Foto lesen (siehe dort; das Vision-Modell nur mit Ersatz-Client).
+* `test_ctc.py`, `test_raster.py`, `test_entzerren.py`, `test_lesen.py`: Foto lesen (siehe dort).
 * `test_app.py`: AppTest (Beispiele, Vorschläge übernehmen, Tabelle bearbeiten über den Widget-Zustand, Text einfügen); `test_runtime_imports.py`: Laufzeitpakete in `requirements.txt`, kein python-chess in der App.
 
 ## Dateien
 
 `app.py` (Oberfläche) · `pf_brett.py` (Schachregeln) · `pf_notation.py` (Zelle lesen) · `pf_pruefung.py` (Auflösung, Begründung, Partieprüfung) · `pf_pgn.py` (Kopf, PGN, Text zu Zellen) · `pf_logik.py` (Zellen ändern, Export wählen) ·
-`pf_constants.py` (Beispiele, Texte) · `pf_ansicht.py` (Brett als SVG) · `pf_pieces.py` (Figuren) · `pf_raster.py` (Foto in Zellen), `pf_entzerren.py` (Raster finden, Perspektive), `pf_ctc.py` (CTC-Rechnung), `pf_erkenner.py` (ONNX-Modell, Simulation), `pf_lesen.py` (Foto lesen, Bildwahrscheinlichkeit), `pf_vision.py` (Vision-Modell) · `tools/messung.py`, `tools/zufall.py`, `tools/messung_hcs.py`, `tools/trocr_messung.py`, `tools/ocr_messung.py`, `tools/messung_vision.py` (Messungen) · `data/messung.json`, `data/messung_stichprobe.json`, `data/hcs_beschriftungen.json`, `data/hcs_messung_*.json`.
+`pf_constants.py` (Beispiele, Texte) · `pf_ansicht.py` (Brett als SVG) · `pf_pieces.py` (Figuren) · `pf_raster.py` (Foto in Zellen), `pf_entzerren.py` (Raster finden, Perspektive), `pf_ctc.py` (CTC-Rechnung), `pf_erkenner.py` (ONNX-Modell, Simulation), `pf_lesen.py` (Foto lesen, Bildwahrscheinlichkeit) · `tools/messung.py`, `tools/zufall.py`, `tools/messung_hcs.py`, `tools/trocr_messung.py`, `tools/ocr_messung.py` (Messungen) · `data/messung.json`, `data/messung_stichprobe.json`, `data/hcs_beschriftungen.json`, `data/hcs_messung_*.json`.
 
 ## Quellen und Lizenzen
 
