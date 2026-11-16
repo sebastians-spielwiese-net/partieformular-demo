@@ -18,11 +18,14 @@ import pf_brett as B
 import pf_constants as C
 import pf_erkenner as ER
 import pf_lesen as LS
+import modul_frisch
 import pf_logik as L
+import pf_notation as N
 import pf_pgn as G
 import pf_pruefung as P
 import pf_raster as R
-from pf_notation import lese
+
+modul_frisch.aktualisieren(__file__)      # geänderte Hilfsmodule nach einem Update neu laden (die Cloud behält sie sonst bis zum Neustart)
 
 st.set_page_config(page_title="Partieformular → PGN – Sebastians Spielwiese", layout="wide")
 
@@ -86,7 +89,7 @@ def _import() -> None:
     st.session_state["pf_preset"] = None
     st.session_state.pop("pf_bewerter", None)
     zellen = [c for r in zeilen for c in r if c.strip()]
-    unlesbar = sum(1 for c in zellen if lese(c).art == "unlesbar")
+    unlesbar = sum(1 for c in zellen if N.lese(c).art == "unlesbar")
     if zellen and 2 * unlesbar > len(zellen):
         meld = meld + [P.Meldung("warnung", f"{unlesbar} von {len(zellen)} Einträgen sehen nicht wie Züge aus. Ist das wirklich eine Zugliste?")]
     st.session_state["pf_import_meldungen"] = meld + [P.Meldung("info", f"{len(zeilen)} Zeile(n) übernommen" + (f", {len(kopf)} Kopfzeile(n) gelesen." if kopf else "."))]
@@ -101,9 +104,19 @@ for _k, _v in RASTER_STANDARD.items():
     st.session_state.setdefault(_k, _v)
 
 
-@st.cache_data(show_spinner=False, max_entries=4)
-def _bild_laden(daten: bytes) -> Image.Image:
-    return R.verkleinern(R.vorbereiten(Image.open(io.BytesIO(daten))))
+def _bild_laden(foto) -> Image.Image:
+    """Dekodiert das Foto einmal je Upload und hält es nur in dieser Sitzung (session_state). Kein sitzungsübergreifender Cache: `st.cache_data` würde das Bild
+    für andere Sitzungen im Arbeitsspeicher des Servers behalten."""
+    s = st.session_state
+    if s.get("pf_bild_id") != foto.file_id:
+        s["pf_bild"] = R.verkleinern(R.vorbereiten(Image.open(io.BytesIO(foto.getvalue()))))
+        s["pf_bild_id"] = foto.file_id
+    return s["pf_bild"]
+
+
+def _bild_vergessen() -> None:
+    for k in ("pf_bild", "pf_bild_id", "pf_r_foto"):
+        st.session_state.pop(k, None)
 
 
 @st.cache_resource(show_spinner=False)
@@ -194,10 +207,17 @@ c8.text_input("Elo Weiß (optional)", key="kopf_WhiteElo")
 c9.text_input("Elo Schwarz (optional)", key="kopf_BlackElo")
 kopf_roh = {k: st.session_state.get(f"kopf_{k}", "") for k in KOPF_FELDER}
 
-foto = st.file_uploader("Foto oder Scan des Formulars (optional)", type=["png", "jpg", "jpeg", "webp"], key="pf_foto",
-                        help="Das Bild wird zum Server dieser App übertragen und liegt dort nur für diese Sitzung im Arbeitsspeicher. Es liegt neben der Tabelle zum Abtippen; im Tab „Foto lesen“ kann die App es lesen.")
-st.caption("**Datenschutz:** Ein hochgeladenes Foto geht an den Server, auf dem diese App läuft (bei der öffentlichen Fassung Streamlit Community Cloud). Die App speichert es nicht und gibt es nicht weiter. "
-           "Auf Formularen stehen Namen von Spielern: Lade nur Formulare hoch, bei denen die Spieler damit einverstanden sind, oder schneide die Kopfzeile mit den Namen vorher ab. Für den Betrieb der Plattform gilt deren eigene Datenschutzerklärung.")
+zustimmung = st.checkbox("Ich bestätige: Die Spieler auf dem Formular sind mit dem Hochladen einverstanden, oder ich habe die Namen vorher abgeschnitten.", key="pf_foto_ok",
+                         help="Ohne diese Bestätigung gibt es kein Upload-Feld. Ohne Foto lässt sich alles andere nutzen: abtippen, Text einfügen, prüfen, PGN erzeugen.")
+foto = None
+if zustimmung:
+    foto = st.file_uploader("Foto oder Scan des Formulars (optional)", type=["png", "jpg", "jpeg", "webp"], key="pf_foto",
+                            help="Das Bild wird zum Server dieser App übertragen und liegt dort nur für diese Sitzung im Arbeitsspeicher. Es liegt neben der Tabelle zum Abtippen; im Tab „Foto lesen“ kann die App es lesen.")
+if foto is None:
+    _bild_vergessen()
+st.caption("**Datenschutz:** Ein hochgeladenes Foto geht an den Server, auf dem diese App läuft (bei der öffentlichen Fassung Streamlit Community Cloud). Die App speichert es nicht, "
+           "hält es nur für diese Sitzung im Arbeitsspeicher und gibt es nicht weiter. Auf Formularen stehen Namen von Spielern: Das Upload-Feld erscheint erst nach Deiner Bestätigung. "
+           "Schneide die Kopfzeile mit den Namen am besten vorher ab. Für den Betrieb der Plattform gilt deren eigene Datenschutzerklärung.")
 tab_tabelle, tab_text, tab_foto = st.tabs(["Zug für Zug", "Text einfügen", "Foto lesen"])
 with tab_tabelle:
     links, rechts = st.columns([3, 2]) if foto is not None else (st.container(), None)
@@ -220,9 +240,9 @@ with tab_text:
 
 with tab_foto:
     if foto is None:
-        st.info("Lade oben ein Foto oder einen Scan Deines Partieformulars hoch. Hier stellst Du dann das Raster ein, und die App liest die Zellen.")
+        st.info("Bestätige oben das Einverständnis der Spieler und lade ein Foto oder einen Scan Deines Partieformulars hoch. Hier stellst Du dann das Raster ein, und die App liest die Zellen.")
     else:
-        bild = _bild_laden(foto.getvalue())
+        bild = _bild_laden(foto)
         if st.session_state.get("pf_r_foto") != foto.file_id:              # neues Foto: Raster gleich selbst suchen
             st.session_state["pf_r_foto"] = foto.file_id
             _raster_automatisch(bild)

@@ -262,6 +262,7 @@ def app_mit_foto(monkeypatch, wahrheit, unsicher=0.0, falsch=0.0, onnx=True, mod
     bild, _ = formular(texte={(i // 2 + 1, i % 2): s for i, s in wahrheit.items()})
     at = AppTest.from_file(PFAD, default_timeout=120)
     at.run()
+    at.checkbox(key="pf_foto_ok").check().run()                       # Upload-Feld erscheint erst nach der Bestätigung
     at.file_uploader(key="pf_foto").set_value(("formular.png", png_bytes(bild), "image/png"))
     at.run()
     assert not at.exception, [e.value for e in at.exception]

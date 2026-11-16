@@ -170,3 +170,29 @@ def test_tabellenbearbeitung_nach_einem_vorschlag_beginnt_neu():
     v = at.session_state["pf_v"]
     next(b for b in at.button if b.key == f"pf_k_{v}_21_0").click().run()
     assert at.session_state["pf_v"] == v + 1 and at.session_state["pf_zeilen"][0][0] == "e4" and at.session_state["pf_zeilen"][10][1] == "Sbd7"
+
+
+# ------------------------------------------------------------------------------------------------- Datenschutz beim Foto-Upload
+def _uploader(at):
+    return [e for e in at.get("file_uploader")] if hasattr(at, "get") else []
+
+
+def test_upload_feld_erscheint_erst_nach_der_bestaetigung():
+    at = AppTest.from_file(PFAD, default_timeout=60)
+    at.run()
+    assert not at.exception
+    assert at.checkbox(key="pf_foto_ok").value is False
+    assert len(_uploader(at)) == 0
+    at.checkbox(key="pf_foto_ok").check().run()
+    assert not at.exception
+    assert len(_uploader(at)) == 1
+    at.checkbox(key="pf_foto_ok").uncheck().run()
+    assert not at.exception
+    assert len(_uploader(at)) == 0 and "pf_bild" not in at.session_state
+
+
+def test_foto_wird_nicht_in_einem_sitzungsuebergreifenden_cache_gehalten():
+    text = (Path(PFAD)).read_text(encoding="utf-8")
+    assert "@st.cache_data" not in text, "st.cache_data würde hochgeladene Bilder für andere Sitzungen im Server-Speicher behalten"
+    assert "cache_resource" in text                                          # nur das Erkennungsmodell (keine Nutzerdaten)
+    assert "_bild_laden(foto)" in text and "session_state" in text

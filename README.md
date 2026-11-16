@@ -87,7 +87,7 @@ Partien in deutscher und englischer Schreibweise werden ohne Befund gelesen und 
 ## Foto lesen (Gerüst)
 
 Im Tab „Foto lesen“ findet die App das Raster des Formulars selbst, und ein Erkenner liest jede beschriebene Zelle. Das Raster lässt sich von Hand nachstellen (Ausschnitt, Drehung, Zeilen, Blöcke, Spaltenbreiten).
-**Datenschutz beim Hochladen:** Ein Foto geht an den Server, auf dem die App läuft (öffentliche Fassung: Streamlit Community Cloud) und liegt dort nur für die Sitzung im Arbeitsspeicher. Die App speichert es nicht und gibt es nicht weiter. Auf Formularen stehen Namen von Spielern: nur Formulare hochladen, bei denen die Spieler einverstanden sind, oder die Kopfzeile vorher abschneiden. Für den Betrieb der Plattform gilt deren Datenschutzerklärung.
+**Datenschutz beim Hochladen:** Das Upload-Feld erscheint erst, wenn Du bestätigst, dass die Spieler auf dem Formular einverstanden sind oder die Namen abgeschnitten sind. Ein Foto geht an den Server, auf dem die App läuft (öffentliche Fassung: Streamlit Community Cloud) und liegt dort nur für die Sitzung im Arbeitsspeicher (`st.session_state`, kein sitzungsübergreifender Cache; `tests/test_app.py` prüft das). Die App speichert es nicht und gibt es nicht weiter. Nimmst Du die Bestätigung zurück oder entfernst das Foto, vergisst die Sitzung das Bild. Für den Betrieb der Plattform gilt deren Datenschutzerklärung.
 
 Der Weg vom Bild zum Zug hat zwei Teile, die in der Prüfung zusammenlaufen:
 
@@ -216,12 +216,12 @@ Das Raster ist der empfindlichste Teil: Mit der alten Voreinstellung lag nur etw
 * `test_pgn.py`: Datum, Kopf, Zeilenumbruch, NAG, Text zu Zellen, Rundlauf.
 * `test_beispiele.py`: jedes Beispiel zeigt seinen Fall; `test_claims.py`: jede Zahl dieser README.
 * `test_ctc.py`, `test_raster.py`, `test_entzerren.py`, `test_lesen.py`: Foto lesen (siehe dort).
-* `test_app.py`: AppTest (Beispiele, Vorschläge übernehmen, Tabelle bearbeiten über den Widget-Zustand, Text einfügen); `test_runtime_imports.py`: Laufzeitpakete in `requirements.txt`, kein python-chess in der App.
+* `test_app.py`: AppTest (Beispiele, Vorschläge übernehmen, Tabelle bearbeiten über den Widget-Zustand, Text einfügen, Upload nur nach Bestätigung, kein Bild-Cache); `test_modul_frisch.py`: geänderte Hilfsmodule werden nach einem Update neu geladen (`modul_frisch.py`, siehe unten); `test_runtime_imports.py`: Laufzeitpakete in `requirements.txt`, kein python-chess in der App.
 
 ## Dateien
 
 `app.py` (Oberfläche) · `pf_brett.py` (Schachregeln) · `pf_notation.py` (Zelle lesen) · `pf_pruefung.py` (Auflösung, Begründung, Partieprüfung) · `pf_pgn.py` (Kopf, PGN, Text zu Zellen) · `pf_logik.py` (Zellen ändern, Export wählen) ·
-`pf_constants.py` (Beispiele, Texte) · `pf_ansicht.py` (Brett als SVG) · `pf_pieces.py` (Figuren) · `pf_raster.py` (Foto in Zellen), `pf_entzerren.py` (Raster finden, Perspektive), `pf_ctc.py` (CTC-Rechnung), `pf_erkenner.py` (ONNX-Modell, Simulation), `pf_lesen.py` (Foto lesen, Bildwahrscheinlichkeit) · `tools/messung.py`, `tools/zufall.py`, `tools/messung_hcs.py`, `tools/trocr_messung.py`, `tools/ocr_messung.py` (Messungen) · `data/messung.json`, `data/messung_stichprobe.json`, `data/hcs_beschriftungen.json`, `data/hcs_messung_*.json`.
+`modul_frisch.py` (lädt geänderte Hilfsmodule nach einem Update neu; die Streamlit Community Cloud behält sie sonst bis zum Neustart der App) · `pf_constants.py` (Beispiele, Texte) · `pf_ansicht.py` (Brett als SVG) · `pf_pieces.py` (Figuren) · `pf_raster.py` (Foto in Zellen), `pf_entzerren.py` (Raster finden, Perspektive), `pf_ctc.py` (CTC-Rechnung), `pf_erkenner.py` (ONNX-Modell, Simulation), `pf_lesen.py` (Foto lesen, Bildwahrscheinlichkeit) · `tools/messung.py`, `tools/zufall.py`, `tools/messung_hcs.py`, `tools/trocr_messung.py`, `tools/ocr_messung.py` (Messungen) · `data/messung.json`, `data/messung_stichprobe.json`, `data/hcs_beschriftungen.json`, `data/hcs_messung_*.json`.
 
 ## Quellen und Lizenzen
 
