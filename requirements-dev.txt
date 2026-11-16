@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8.0
+# nur für die Tests (Orakel für Schachregeln, SAN, FEN und PGN), nicht für die App (GPL-3.0 oder neuer):
+chess>=1.10

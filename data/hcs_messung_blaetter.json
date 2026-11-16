@@ -1,0 +1,15 @@
+{
+ "blaetter": 20,
+ "halbzuege": 262,
+ "roh_richtig": 207,
+ "basis_richtig": 206,
+ "bild_richtig": 215,
+ "basis_still_falsch": 5,
+ "bild_still_falsch": 16,
+ "basis_unklar": 31,
+ "bild_unklar": 43,
+ "basis_nicht_pruefbar": 27,
+ "bild_nicht_pruefbar": 0,
+ "erkenner": "onnx",
+ "rastersuche": true
+}

@@ -1,0 +1,55 @@
+{
+ "erfunden": {
+  "als_regelverstoss": 300,
+  "versuche": 300,
+  "vorschlaege_geprueft": 462,
+  "vorschlaege_legal": 462
+ },
+ "frueher": {
+  "davon_im_fenster": 184,
+  "frueher_genannt": 168,
+  "frueher_genannt_ganz": 79,
+  "spaeter_regelverstoss": 241,
+  "versuche": 278
+ },
+ "luecke": {
+  "gleichstand": 123,
+  "gleichstand_kandidaten_summe": 617,
+  "gleichstand_wahrer_dabei": 106,
+  "ohne_gleichstand": 177,
+  "ohne_gleichstand_richtig": 177,
+  "unklar": 300,
+  "versuche": 300,
+  "wahrer_unter_kandidaten": 283
+ },
+ "mindestlaenge": 24,
+ "partien": 300,
+ "zeichen": {
+  "eindeutig": 175,
+  "gleichstand": 28,
+  "gleichstand_kandidaten_summe": 68,
+  "gleichstand_wahrer_dabei": 28,
+  "mehrere": 124,
+  "ohne_gleichstand": 271,
+  "ohne_gleichstand_richtig": 271,
+  "regelverstoss": 0,
+  "unklar": 299,
+  "versuche": 299,
+  "wahrer_unter_kandidaten": 299
+ },
+ "zielfeld": {
+  "regelverstoss": 133,
+  "versuche": 162,
+  "wahrer_unter_vorschlaegen": 133
+ },
+ "zusatz": {
+  "gleichstand": 39,
+  "gleichstand_kandidaten_summe": 78,
+  "gleichstand_wahrer_dabei": 39,
+  "ohne_gleichstand": 134,
+  "ohne_gleichstand_richtig": 134,
+  "unklar": 173,
+  "versuche": 173,
+  "wahrer_unter_kandidaten": 173
+ }
+}

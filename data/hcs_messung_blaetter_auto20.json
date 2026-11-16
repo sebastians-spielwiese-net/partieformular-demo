@@ -1,0 +1,16 @@
+{
+ "blaetter": 20,
+ "halbzuege": 262,
+ "roh_richtig": 234,
+ "basis_richtig": 161,
+ "bild_richtig": 233,
+ "basis_still_falsch": 7,
+ "bild_still_falsch": 11,
+ "basis_unklar": 5,
+ "bild_unklar": 34,
+ "basis_nicht_pruefbar": 91,
+ "bild_nicht_pruefbar": 0,
+ "erkenner": "onnx",
+ "rastersuche": false,
+ "raster_automatisch": true
+}

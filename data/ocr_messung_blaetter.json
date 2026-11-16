@@ -1,0 +1,12 @@
+{
+ "blaetter": 20,
+ "halbzuege": 262,
+ "roh_richtig": 80,
+ "basis_richtig": 36,
+ "basis_still_falsch": 2,
+ "basis_unklar": 71,
+ "basis_nicht_pruefbar": 152,
+ "modell": "zai-org/GLM-OCR",
+ "zuschnitt": false,
+ "sekunden": 288.4
+}

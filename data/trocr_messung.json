@@ -1,0 +1,9 @@
+{
+ "zellen": 100,
+ "kandidaten_je_zelle": 8,
+ "schach_modell": 92,
+ "trocr_gestaucht": 15,
+ "trocr_seitenverhaeltnis": 11,
+ "schach_plus_trocr": 92,
+ "gewicht_trocr": 0.3
+}

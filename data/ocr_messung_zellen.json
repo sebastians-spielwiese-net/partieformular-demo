@@ -1,0 +1,7 @@
+{
+ "zellen": 300,
+ "roh_richtig": 39,
+ "normiert_richtig": 115,
+ "cer_normiert": 0.46644664466446645,
+ "modell": "zai-org/GLM-OCR"
+}
