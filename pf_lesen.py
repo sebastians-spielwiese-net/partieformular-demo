@@ -186,3 +186,65 @@ def suche_raster(bild: Image.Image, raster: R.Raster, erkenner: Erkenner, oben=(
     bewertungen.sort(reverse=True)
     _, o, u = bewertungen[0]
     return replace(raster, oben=o, unten=u), bewertungen
+
+
+# --------------------------------------------------------------------------- Partie aus dem Bild entschlüsseln
+@dataclass
+class Entscheidung:
+    ply: int
+    san: str                                   # gewählter Zug (SAN mit englischen Buchstaben, wie `Stellung.san`)
+    wahrscheinlichkeit: float                  # Anteil der Strahlwahrscheinlichkeit, der an diesem Halbzug auf diesen Zug fällt
+    alternativen: list = field(default_factory=list)   # [(SAN, Wahrscheinlichkeit)] der nächsten Züge
+
+
+def dekodiere(lesung: FormularLesung, strahl: int = 300, strafdeckel: float | None = 12.0) -> list[Entscheidung]:
+    """Die wahrscheinlichste legale Partie zu den gelesenen Zellen: Strahlsuche über die Halbzüge. Jede Hypothese ist eine legale Zugfolge; ihre Punktzahl ist die Summe der
+    Logwahrscheinlichkeiten, mit denen das Bild jeder Zelle zum jeweiligen Zug passt. Ein falsch gelesener Zug, der zu einer Stellung führt, in der die Folgezellen nicht mehr passen,
+    verliert gegen den richtigen. `strafdeckel` begrenzt den Abzug für eine Zelle: Kein Zug wird in einer Stellung um mehr als diesen Wert schlechter gewertet als der beste Zug dort,
+    damit eine unleserliche Zelle die Partie nicht abbricht und die Folgezellen den richtigen Zug bestimmen können (None: kein Deckel). Die Suche endet bei der ersten leeren Zelle;
+    eine beendete Partie (Matt, Patt) bleibt im Rennen und zahlt für weitere nicht leere Zellen nur, was die Zelle als leer unwahrscheinlich ist; `strahl` Hypothesen bleiben je Halbzug erhalten.
+    Rückgabe: je Halbzug der Zug der besten Hypothese, sein Anteil an den Hypothesen am Ende und die stärksten Alternativen."""
+    zellen = []
+    for c in lesung.zellen:
+        if c.leer or c.logp is None:
+            break
+        zellen.append(c)
+    if not zellen:
+        return []
+    cache: dict[tuple[int, str], float] = {}
+
+    def punkte(ply: int, san: str) -> float:
+        k = (ply, san)
+        if k not in cache:
+            cache[k] = zug_logwahrscheinlichkeit(zellen[ply].logp, san)
+        return cache[k]
+
+    hyp = [(0.0, B.Stellung.start(), ())]                  # (Punktzahl, Stellung, Zugfolge als SAN)
+    for ply in range(len(zellen)):
+        kandidaten = []                                     # (Punktzahl, Index der Hypothese, Zug, SAN)
+        for h, (score, st, folge) in enumerate(hyp):
+            if st.ende() in ("matt", "patt", "material"):                   # die Partie ist zu Ende: eine weitere Zelle muss leer aussehen, sonst kostet sie die Hypothese Punkte
+                leer = C.logwahrscheinlichkeit(zellen[ply].logp, [])
+                kandidaten.append((score + (max(leer, -strafdeckel) if strafdeckel is not None else leer), h, None, None))
+                continue
+            zuege = [(st.san(z), z) for z in st.legale_zuege()]
+            werte = [punkte(ply, s) for s, _ in zuege]
+            boden = (max(werte) - strafdeckel) if (strafdeckel is not None and werte) else None
+            for (s, z), w in zip(zuege, werte):
+                kandidaten.append((score + (max(w, boden) if boden is not None else w), h, z, s))
+        if not kandidaten:
+            break
+        kandidaten.sort(key=lambda k: -k[0])
+        hyp = [(score, hyp[h][1] if z is None else hyp[h][1].ausfuehren(z), hyp[h][2] if z is None else hyp[h][2] + (s,)) for score, h, z, s in kandidaten[:strahl]]
+    scores = np.array([h[0] for h in hyp])
+    w = np.exp(scores - np.logaddexp.reduce(scores))
+    beste = hyp[int(np.argmax(scores))][2]
+    out = []
+    for ply in range(len(beste)):
+        summen: dict[str, float] = {}
+        for wi, h in zip(w, hyp):
+            if len(h[2]) > ply:
+                summen[h[2][ply]] = summen.get(h[2][ply], 0.0) + float(wi)
+        rang = sorted(summen.items(), key=lambda t: -t[1])
+        out.append(Entscheidung(ply, beste[ply], summen.get(beste[ply], 0.0), [(s, p) for s, p in rang if s != beste[ply]][:3]))
+    return out

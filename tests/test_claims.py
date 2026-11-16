@@ -220,3 +220,15 @@ def test_nachtraining_zahlen_der_readme():
     assert f"ab 0,97 ({p(z[0.97]['anteil_der_zellen'])} der Zellen) in {p(z[0.97]['trefferquote'])}" in README
     t = n["tta"]
     assert f"von {p(t['echt_mra_ohne'])} auf {p(t['echt_mra'])} und auf den deutschen von {p(t['deutsch_mra_ohne'])} auf {p(t['deutsch_mra'])}" in README
+
+
+def test_messung_eigener_scan_steht_in_der_readme():
+    """Nur Summenzahlen eines privaten Scans (Bild und Züge sind nicht im Repository): jede Zahl der README aus data/messung_eigener_scan.json."""
+    m = json.loads((WURZEL / "data" / "messung_eigener_scan.json").read_text(encoding="utf-8"))
+    n = m["halbzuege_wahrheit"]
+    assert f"Der gierig gelesene Text stimmt in {m['zellen_gierig_exakt']} von {n} Zellen ganz" in README
+    assert f"die Strahlsuche setzt {m['strahlsuche_richtig']} von {n} Halbzügen richtig ({round(100 * m['strahlsuche_richtig'] / n)} %)" in README
+    assert f"der erste Fehler liegt bei Halbzug {m['erster_fehler_halbzug']}" in README
+    assert f"{m['sicher_ab_90_prozent']} Halbzüge haben mindestens 90 % Anteil" in README and f"nur {m['sicher_davon_richtig']} davon sind richtig" in README
+    assert f"{m['sekunden_lesen']} und {m['sekunden_strahlsuche']} Sekunden" in README
+    assert m["strahlsuche_halbzuege"] == n and m["sicher_davon_richtig"] <= m["sicher_ab_90_prozent"]

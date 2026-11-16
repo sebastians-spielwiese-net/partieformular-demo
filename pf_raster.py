@@ -30,12 +30,19 @@ class Raster:
     spalten: tuple = (0.10, 0.45, 0.45)   # Breite von Nummer, Weiß, Schwarz je Block (Anteile, werden auf 1 normiert)
     einrasten: bool = True          # Zeilengrenzen auf gedruckte Linien setzen
     ecken: tuple | None = None      # vier Ecken der Tabelle (oben links, oben rechts, unten rechts, unten links) als Anteile des Bildes: dann wird entzerrt, und Ausschnitt und Drehung gelten nicht
+    spaltenlage: tuple | None = None    # je Block (Weiß links, Weiß rechts, Schwarz links, Schwarz rechts) als Anteile der Breite des zugeschnittenen Bildes (Formulare ohne senkrechte Linien, siehe pf_vorlage)
+    zeilenlinien: tuple | None = None   # zeilen + 1 y-Werte als Anteile der Höhe des zugeschnittenen Bildes; gilt zusammen mit spaltenlage
+    bereinigen: bool = False            # Zellen vor dem Lesen bereinigen (blasse Schrift, gedruckte Linien, Schrägschrift), siehe bereinige_zelle
 
     def pruefe(self) -> None:
         if not (0 <= self.links < self.rechts <= 1 and 0 <= self.oben < self.unten <= 1):
             raise ValueError("Ausschnitt ungültig")
         if self.zeilen < 1 or self.bloecke < 1 or len(self.spalten) != 3 or min(self.spalten) <= 0:
             raise ValueError("Raster ungültig")
+        if (self.spaltenlage is None) != (self.zeilenlinien is None):
+            raise ValueError("Spaltenlage und Zeilenlinien gehören zusammen")
+        if self.spaltenlage is not None and (len(self.spaltenlage) != self.bloecke or len(self.zeilenlinien) != self.zeilen + 1):
+            raise ValueError("Spaltenlage oder Zeilenlinien passen nicht zu Blöcken und Zeilen")
 
 
 def vorbereiten(bild: Image.Image) -> Image.Image:
@@ -87,9 +94,15 @@ def zeilengrenzen(block: np.ndarray, n: int, einrasten: bool = True, toleranz: f
 
 def zellboxen(breite: int, hoehe: int, r: Raster, bild_grau: np.ndarray | None = None) -> list[list[tuple[int, int, int, int]]]:
     """Alle Zellen als (links, oben, rechts, unten), geordnet nach Zugnummer: je Zug [Weiß, Schwarz]. Zug n steht im Block (n-1)//zeilen."""
+    zuege: list[list[tuple[int, int, int, int]]] = []
+    if r.spaltenlage is not None and r.zeilenlinien is not None:            # gedruckte Lage (Formular ohne senkrechte Linien)
+        ys = [round(y * hoehe) for y in r.zeilenlinien]
+        for w0, w1, s0, s1 in r.spaltenlage:
+            for i in range(r.zeilen):
+                zuege.append([(round(w0 * breite), ys[i], round(w1 * breite), ys[i + 1]), (round(s0 * breite), ys[i], round(s1 * breite), ys[i + 1])])
+        return zuege
     summe = sum(r.spalten)
     anteile = [s / summe for s in r.spalten]
-    zuege: list[list[tuple[int, int, int, int]]] = []
     for b in range(r.bloecke):
         x0, x1 = round(b * breite / r.bloecke), round((b + 1) * breite / r.bloecke)
         bw = x1 - x0
@@ -113,7 +126,8 @@ def zellen(bild: Image.Image, r: Raster) -> list[list[Image.Image]]:
         zeile = []
         for (a, b, c, d) in paar:
             a = a + round(LINKS_BESCHNITT * (c - a))             # die Zugnummer der Nachbarspalte reicht oft ein Stück in die Zelle
-            zeile.append(z.crop((max(0, a), max(0, b - rand), min(z.width, c), min(z.height, d + rand))))
+            ausschnitt = z.crop((max(0, a), max(0, b - rand), min(z.width, c), min(z.height, d + rand)))
+            zeile.append(bereinige_zelle(ausschnitt) if r.bereinigen else ausschnitt)
         out.append(zeile)
     return out
 
@@ -228,7 +242,70 @@ def verkleinern(bild: Image.Image, max_seite: int = 2400) -> Image.Image:
 def raster_finden(bild: Image.Image, zeilen: int = 30) -> tuple[Raster, list[str]]:
     """Findet das Raster selbst (siehe pf_entzerren): Ecken, Zeilen, Blöcke und Spaltenbreiten. Gibt das Raster und Hinweise zurück; wird nichts gefunden, ist es das
     Standardraster."""
-    fund = finde_raster(vorbereiten(bild), zeilen)
+    bild = vorbereiten(bild)
+    fund = finde_raster(bild, zeilen)
+    if any("senkrechten Linien wurden nicht gefunden" in h for h in fund.hinweise):     # Formular ohne Tabellenränder: Struktur aus den Zeilenlinien lesen
+        from pf_vorlage import finde as finde_linienformular
+        gefunden = finde_linienformular(bild)
+        if gefunden is not None:
+            return gefunden
     if not fund.gefunden:
         return Raster(), fund.hinweise
     return Raster(zeilen=fund.zeilen, bloecke=fund.bloecke or 2, spalten=fund.spalten or Raster().spalten, ecken=fund.ecken), fund.hinweise
+
+
+# --------------------------------------------------------------------------- Zellen bereinigen (blasse Bleistiftschrift, gedruckte Linien, Schrägschrift)
+def _scheren(tinte: np.ndarray, winkel_grad: float) -> np.ndarray:
+    """Tinte (0 bis 1, Zeilen x Spalten) waagerecht scheren: Schräge Schrift wird aufgerichtet. Positiver Winkel kippt die Oberkante nach links."""
+    h, w = tinte.shape
+    k = np.tan(np.radians(winkel_grad))
+    versatz = (np.arange(h) - h / 2.0) * k
+    breite = w + int(abs(k) * h) + 2
+    out = np.zeros((h, breite), dtype=tinte.dtype)
+    for y in range(h):
+        s = int(round(versatz[y] + (breite - w) / 2.0))
+        out[y, max(0, s):min(breite, s + w)] = tinte[y, max(0, -s):w - max(0, s + w - breite)]
+    return out
+
+
+def schraege_schaetzen(tinte: np.ndarray, bereich: float = 30.0, schritt: float = 2.5) -> float:
+    """Neigung der Schrift in Grad (positiv: Oberkante nach rechts geneigt): der Scherwinkel, bei dem die senkrechten Striche am schärfsten stehen
+    (größte Streuung der Spaltensummen)."""
+    if tinte.sum() < 1:
+        return 0.0
+    bester, winkel = -1.0, 0.0
+    for a in np.arange(-bereich, bereich + 1e-9, schritt):
+        s = _scheren(tinte, a).sum(axis=0)
+        wert = float((s ** 2).sum())
+        if wert > bester:
+            bester, winkel = wert, float(a)
+    return winkel
+
+
+def bereinige_zelle(zelle: Image.Image, linien_entfernen: bool = True, aufrichten: bool = True) -> Image.Image:
+    """Zelle für den Erkenner vorbereiten, wenn die Schrift blass ist oder gedruckte Linien im Bild liegen: Papierton abziehen, gedruckte Zeilenlinien (Pixelzeilen, die fast über die
+    ganze Breite dunkel sind) löschen, die Tinte auf vollen Kontrast spreizen und schräge Schrift aufrichten. Rückgabe: Graustufenbild, dunkle Tinte auf Weiß."""
+    g = grau(zelle).astype(float)
+    h, w = g.shape
+    if h < 8 or w < 8:
+        return zelle.convert("L")
+    papier = float(np.percentile(g, 75))
+    tinte = np.clip(papier - g, 0.0, None)
+    ref = float(np.percentile(tinte, 99.5))
+    if ref < 6.0:                                    # praktisch leer: nichts spreizen
+        return zelle.convert("L")
+    if linien_entfernen:                             # gedruckte Linie zuerst löschen: Sie ist oft dunkler als die Schrift und bestimmte sonst den Kontrast
+        stark = (tinte > 0.5 * ref).mean(axis=1)
+        for y in np.where(stark > 0.6)[0]:           # fast die ganze Zeile dunkel
+            tinte[max(0, y - 1):y + 2, :] = 0.0
+        ref = float(np.percentile(tinte, 99.5))
+        if ref < 6.0:
+            return Image.new("L", zelle.size, 255)
+    tinte = tinte / ref
+    tinte = np.clip(tinte, 0.0, 1.0)
+    tinte[tinte < 0.12] = 0.0                       # Papierrauschen
+    if aufrichten:
+        winkel = schraege_schaetzen(tinte)
+        if abs(winkel) > 1.0:
+            tinte = _scheren(tinte, winkel)
+    return Image.fromarray((255.0 * (1.0 - tinte)).astype(np.uint8), mode="L")

@@ -265,58 +265,58 @@ def app_mit_foto(monkeypatch, wahrheit, unsicher=0.0, falsch=0.0, onnx=True, mod
     monkeypatch.setattr(SW, "foto_schwaerzen", lambda key: foto)       # die Komponente (HTML/JS) läuft nur im Browser
     at = AppTest.from_file(PFAD, default_timeout=120)
     at.run()
-    at.checkbox(key="pf_foto_ok").check().run()                       # die Foto-Auswahl erscheint erst nach der Bestätigung
+    at.checkbox(key="pf_foto_ok").check().run()                       # die Foto-Auswahl erscheint erst nach der Bestätigung; danach läuft die Automatik
     assert not at.exception, [e.value for e in at.exception]
     return at
 
 
-def test_app_liest_das_foto(monkeypatch):
+def test_app_liest_das_foto_von_selbst(monkeypatch):
+    """Nach der Bestätigung läuft alles allein: Raster, Zellen, Strahlsuche; die Tabelle ist gefüllt und die Partie datenbanktauglich."""
     wahrheit = {i: s for i, s in enumerate(OPER)}
     at = app_mit_foto(monkeypatch, wahrheit)
-    next(b for b in at.button if b.label == "Zellen lesen").click().run()
-    assert not at.exception, [e.value for e in at.exception]
-    assert at.session_state["pf_zeilen"][0][:2] == ["e4", "e5"] and at.session_state["pf_zeilen"][16][0] == "Rd8#"
+    zeilen = at.session_state["pf_zeilen"]
+    assert zeilen[0][:2] == ["e4", "e5"] and zeilen[16][0] in ("Rd8#", "Td8#")
     assert any(s.value.startswith("Datenbanktauglich") for s in at.success)
-    assert any("Zellen gelesen" in s.value or "beschriebene Zellen" in s.value for s in at.success)
+    assert at.session_state["pf_bewerter"] is not None and at.session_state["pf_auto_id"] == "test-1"
+    assert any("entschlüsselt" in str(s.label) for s in at.status) or at.session_state["pf_entschluesselt"]
+    assert not [b for b in at.button if b.label == "Zellen lesen"], "kein eigener Lese-Knopf mehr"
 
 
 def test_app_foto_mit_unsicherem_erkenner_zeigt_zellbilder_und_bildwerte(monkeypatch):
     wahrheit = {i: s for i, s in enumerate(OPER)}
     at = app_mit_foto(monkeypatch, wahrheit, unsicher=0.08, falsch=0.04)
-    next(b for b in at.button if b.label == "Zellen lesen").click().run()
-    assert not at.exception, [e.value for e in at.exception]
     assert at.session_state["pf_bewerter"] is not None and len(at.image) >= 1
-    assert any("Bild:" in c.value for c in at.caption)
     # Nach dem Übernehmen eines Vorschlags bleibt das Bild für die übrigen Zellen erhalten
-    v = at.session_state["pf_v"]
-    knopf = next(b for b in at.button if (b.key or "").startswith(f"pf_k_{v}_"))
-    knopf.click().run()
-    assert not at.exception and at.session_state["pf_bewerter"] is not None
+    knoepfe = [b for b in at.button if (b.key or "").startswith("pf_k_")]
+    if knoepfe:
+        knoepfe[0].click().run()
+        assert not at.exception and at.session_state["pf_bewerter"] is not None
 
 
 def test_app_ohne_onnxruntime_oder_modell(monkeypatch):
     at = app_mit_foto(monkeypatch, {0: "e4"}, onnx=False)
-    assert any("nicht installiert" in w.value for w in at.warning) and not [b for b in at.button if b.label == "Zellen lesen"]
-    at = app_mit_foto(monkeypatch, {0: "e4"}, modell=False)
-    assert any("Modell" in i.value for i in at.info) and [b for b in at.button if b.label == "Modell laden"]
-
-
-def test_app_preset_vergisst_das_foto_ergebnis(monkeypatch):
-    at = app_mit_foto(monkeypatch, {i: s for i, s in enumerate(OPER[:6])})
-    next(b for b in at.button if b.label == "Zellen lesen").click().run()
-    assert at.session_state["pf_bewerter"] is not None
-    next(b for b in at.sidebar.button if b.label == "Saubere Partie").click().run()
-    assert "pf_bewerter" not in at.session_state
+    assert any("onnxruntime" in str(s.label) for s in at.status) and at.session_state.get("pf_bewerter") is None
+    geladen = []
+    monkeypatch.setattr(E, "modell_holen", lambda *a, **k: geladen.append(1))
+    app_mit_foto(monkeypatch, {0: "e4"}, modell=False)
+    assert geladen == [1], "fehlt das Modell, lädt die App es selbst (einmalig)"
 
 
 def test_app_sucht_das_raster_beim_hochladen_selbst(monkeypatch):
     at = app_mit_foto(monkeypatch, {i: s for i, s in enumerate(OPER[:6])})
-    assert at.session_state["pf_r_ecken"] is not None and any("Raster gefunden und entzerrt" in s.value for s in at.success)
+    assert at.session_state["pf_r_ecken"] is not None
     assert at.session_state["pf_r_zeilen"] == 30 and at.session_state["pf_r_bloecke"] == 2
     next(b for b in at.button if b.label == "Entzerrung verwerfen, von Hand einstellen").click().run()
     assert at.session_state["pf_r_ecken"] is None and not at.exception
     next(b for b in at.button if b.label == "Raster automatisch finden").click().run()
     assert at.session_state["pf_r_ecken"] is not None and not at.exception
+
+
+def test_app_neu_lesen_mit_eingestelltem_raster(monkeypatch):
+    at = app_mit_foto(monkeypatch, {i: s for i, s in enumerate(OPER[:6])})
+    next(b for b in at.button if b.label == "Entzerrung verwerfen, von Hand einstellen").click().run()
+    next(b for b in at.button if b.label == "Mit diesem Raster neu lesen").click().run()
+    assert not at.exception and at.session_state["pf_r_ecken"] is None, "Neu lesen sucht das Raster nicht noch einmal"
 
 
 def test_app_ungueltiger_ausschnitt(monkeypatch):

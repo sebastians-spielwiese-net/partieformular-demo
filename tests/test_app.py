@@ -1,4 +1,5 @@
-"""AppTest-Rauchtests: Standard, jedes Beispiel, Vorschläge übernehmen, Text einfügen, Einstellungen. (AppTest rendert kein SVG und bedient die Tabelle nicht; das prüft die Browser-Verifikation.)"""
+"""Tests der Foto-App mit AppTest: die Prüf- und Nacharbeit-Abschnitte laufen auf Beispielpartien (pf_constants.PRESETS), die hier direkt in den Zustand der App geschrieben werden,
+denn die App selbst bietet nur noch die Foto-Funktion. (AppTest rendert kein SVG und bedient die Tabelle nicht; das prüft die Browser-Verifikation.)"""
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,15 @@ def neu() -> AppTest:
 
 
 def laden(at: AppTest, name: str) -> AppTest:
-    next(b for b in at.sidebar.button if b.label == name).click().run()
+    """Legt eine Beispielpartie so in den Zustand der App, wie das Lesen eines Fotos es täte (Kopf, Zeilen, frische Tabelle)."""
+    p = C.PRESETS[name]
+    for k in ("White", "Black", "Result", "Event", "Site", "Date", "Round", "WhiteElo", "BlackElo"):
+        at.session_state[f"kopf_{k}"] = p["Kopf"].get(k, "")
+    zeilen = C.auffuellen(p["Zeilen"])
+    at.session_state["pf_zeilen"] = zeilen
+    at.session_state["pf_basis"] = zeilen
+    at.session_state["pf_v"] = at.session_state["pf_v"] + 1
+    at.run()
     assert not at.exception, [e.value for e in at.exception]
     return at
 
@@ -26,13 +35,14 @@ def metriken(at: AppTest) -> dict:
     return {m.label: m.value for m in at.metric}
 
 
-def test_standard_laeuft_und_zeigt_bereiche():
+def test_standard_ist_ein_leeres_formular_nur_mit_foto():
     at = neu()
-    assert at.title[0].value.startswith("📝")
-    assert [h.value for h in at.sidebar.header] == ["🎯 Schnellstart", "⚙️ Einstellungen"]
-    assert [h.value for h in at.main.header] == ["1 · Formular erfassen", "2 · Prüfung gegen die Schachregeln", "3 · Partie nachspielen", "4 · PGN für die Datenbank"]
-    assert [b.label for b in at.sidebar.button] == list(C.PRESETS)
-    assert metriken(at) == {"Halbzüge gelesen": "33", "in Ordnung": "32", "unklar": "1", "Regelverstöße": "0", "nicht prüfbar": "0"}
+    assert at.title[0].value.startswith("📷")
+    assert not at.sidebar.button and not at.sidebar.header, "keine Seitenleiste mit Beispielen und Einstellungen mehr"
+    assert [h.value for h in at.main.header] == ["1 · Foto", "2 · Prüfung gegen die Schachregeln", "3 · PGN für die Datenbank"]
+    assert not at.metric and any("Noch keine Züge" in i.value for i in at.info)
+    assert [c.label for c in at.checkbox] == ["Ich bestätige: Ich schwärze die Namen auf dem Foto, oder die Spieler sind mit dem Hochladen einverstanden."]
+    assert not at.text_area, "kein Textfeld zum Einfügen mehr"
 
 
 @pytest.mark.parametrize("name,erwartet", [
@@ -52,12 +62,6 @@ def test_jedes_beispiel(name, erwartet):
 def test_leeres_formular_zeigt_hinweis():
     at = laden(neu(), "Leeres Formular")
     assert not at.metric and any("Noch keine Züge" in i.value for i in at.info)
-
-
-def test_aktives_beispiel_ist_hervorgehoben():
-    at = neu()
-    arten = {b.label: b.proto.type for b in at.sidebar.button}
-    assert arten[C.STANDARD_PRESET] == "primary" and sum(1 for a in arten.values() if a == "primary") == 1
 
 
 def test_saubere_partie_ist_datenbanktauglich_mit_pgn():
@@ -110,33 +114,12 @@ def test_legalen_zug_aus_liste_waehlen():
     assert not at.exception and at.session_state["pf_zeilen"][2][1] == "Sc6"
 
 
-def test_text_einfuegen():
-    at = neu()
-    at.text_area(key="pf_import_text").set_value('[White "Muster, Max"]\n[Black "Beispiel, Berta"]\n[Result "½-½"]\n\n1. e4 e5 2. Sf3 Sc6 3. Lb5 a6')
-    next(b for b in at.button if b.label == "In das Formular übernehmen").click().run()
-    assert not at.exception, [e.value for e in at.exception]
-    assert at.session_state["kopf_White"] == "Muster, Max" and at.session_state["kopf_Result"] == "1/2-1/2"
-    assert at.session_state["pf_zeilen"][2] == ["Lb5", "a6"] and metriken(at)["Halbzüge gelesen"] == "6"
-
-
-def test_text_ohne_zuege_gibt_warnung():
-    at = neu()
-    at.text_area(key="pf_import_text").set_value("nichts Brauchbares hier")
-    next(b for b in at.button if b.label == "In das Formular übernehmen").click().run()
-    assert not at.exception and any("nicht wie Züge aus" in w.value for w in at.markdown)
-
-
-def test_einstellung_buchstaben_warnt_bei_falscher_schreibweise():
+def test_buchstabenwahl_aus_dem_zustand_warnt_bei_falscher_schreibweise():
     at = laden(neu(), "Saubere Partie")
-    at.radio(key="pf_buchstaben").set_value("en").run()
+    at.session_state["pf_buchstaben"] = "en"
+    at.run()
     assert not at.exception
     assert any("deutschen" in m.value for m in at.markdown)
-
-
-def test_nur_auffaelliges():
-    at = laden(neu(), "Unscharf geschrieben")
-    at.toggle(key="pf_nur_auffaellig").set_value(True).run()
-    assert not at.exception
 
 
 def tabelle_aendern(at: AppTest, aenderungen: dict, neue_zeilen: list | None = None) -> AppTest:

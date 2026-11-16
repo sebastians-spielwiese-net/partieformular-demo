@@ -2,5 +2,5 @@ streamlit>=1.40
 pandas>=2.0
 numpy>=1.26
 pillow>=10.1
-# nur für „Foto lesen“; die App läuft ohne, dann bleibt die Tabelle zum Abtippen:
+# liest die Zellen des Formulars (ohne onnxruntime meldet die App das und bleibt leer):
 onnxruntime>=1.18

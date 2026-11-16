@@ -1,0 +1,12 @@
+{
+ "halbzuege_wahrheit": 95,
+ "zellen_gelesen": 106,
+ "zellen_gierig_exakt": 10,
+ "strahlsuche_halbzuege": 95,
+ "strahlsuche_richtig": 39,
+ "erster_fehler_halbzug": 16,
+ "sicher_ab_90_prozent": 84,
+ "sicher_davon_richtig": 38,
+ "sekunden_lesen": 7,
+ "sekunden_strahlsuche": 34
+}

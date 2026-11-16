@@ -1,8 +1,9 @@
 # Partieformular → PGN (partieformular-demo)
 
-Interaktive Streamlit-Demo der [Sebastians Spielwiese](https://sebastians-spielwiese.net/) (Schach-Linie, Demo C). Du schreibst die Züge eines Turnier-Partieformulars ab, die App liest jede Zelle tolerant,
-spielt die Partie nach, **prüft jeden Zug gegen die Schachregeln**, markiert **unklare Stellen**, begründet **Regelverstöße** und erzeugt ein **PGN** für die Datenbank.
-Nacharbeit ist ausdrücklich vorgesehen: Jede Entscheidung steht als Text in der Zelle, nicht in einem versteckten Zustand.
+Interaktive Streamlit-Demo der [Sebastians Spielwiese](https://sebastians-spielwiese.net/) (Schach-Linie, Demo C). Du lädst ein **Foto oder einen Scan** eines Turnier-Partieformulars hoch, schwärzt im Browser die Namen,
+und die App macht den Rest von selbst: Sie **findet das Raster**, **liest jede Zelle**, sucht die **wahrscheinlichste Partie, in der jeder Zug regelkonform ist**, **prüft jeden Zug gegen die Schachregeln**,
+markiert **unklare Stellen**, begründet **Regelverstöße** und erzeugt ein **PGN** für die Datenbank.
+Nacharbeit ist ausdrücklich vorgesehen: Jede Entscheidung steht als Text in der Zelle, nicht in einem versteckten Zustand. Handschrift liest die App nur teilweise richtig (Zahlen unten).
 
 Live: [spielwiese-partieformular.streamlit.app](https://spielwiese-partieformular.streamlit.app/)
 
@@ -10,13 +11,13 @@ Lauffähig mit: `streamlit run app.py`
 
 ## Was die Demo zeigt
 
-* **Formular erfassen:** Kopfdaten (Namen, Ergebnis, Turnier, Ort, Datum, Runde, Elo) und eine Tabelle Zug für Zug (Weiß, Schwarz) oder Text einfügen (auch ein ganzes PGN). Ein Foto oder Scan kann daneben liegen und im Tab „Foto lesen“ von einem Erkenner gelesen werden (Gerüst, siehe unten).
+* **Foto:** Die Auswahl erscheint erst nach einer Bestätigung zum Datenschutz. Die Datei wird nur im Browser gelesen, Namen schwärzt Du dort; danach läuft alles automatisch (Raster, Zellen lesen, Partie suchen). Kopfdaten für das PGN sind optional.
 * **Prüfung:** Jede Zelle bekommt einen Status: in Ordnung, bereinigt (genau ein Zug passt, die Schreibweise wurde geglättet), unklar, Regelverstoß oder nicht prüfbar (hinter einem Regelverstoß).
   Dazu eine Meldung zu jedem Fund, eine Tabelle mit Farben und, bei jeder Problemstelle, das Brett vor dem Zug mit den Kandidaten als Pfeilen.
 * **Nacharbeit:** Vorschläge übernehmen (der Zug wird in der Schreibweise des Formulars in die Zelle geschrieben, auf einem deutschen Formular also mit S, L, T, D), die Zelle selbst ändern, einen legalen Zug aus der Liste wählen, bei einem Zug nach dem Ende die Zellen leeren.
-* **Nachspielen:** Schieberegler über die Partie mit Brett und FEN, zum Abgleich mit dem Formular.
+  Die gelesenen Züge stehen in einer Tabelle, die Du direkt ändern kannst; die Prüfung läuft sofort neu.
 * **PGN:** sieben Pflichtzeilen in Standardreihenfolge, Zugnummern, Zeilen bis 80 Zeichen, Bewertungszeichen als NAG. Ist alles geklärt: das PGN. Sonst die Wahl zwischen einem Teil-PGN (nur gesicherte Züge) und einem vorläufigen PGN (gewählte Vorschläge, unklare Stellen als Kommentar).
-* **Sechs Beispielformulare** in der Seitenleiste, je eines pro Fall (siehe Tabelle unten).
+* Unter „Erweitert“ lässt sich das Raster von Hand einstellen und neu lesen. Beispielformulare, Texteingabe und das Nachspielen gibt es nicht mehr; die Beispiele (Tabelle unten) sind die Testfälle der Prüfung.
 
 ## Wie die App eine Zelle liest und entscheidet
 
@@ -31,7 +32,7 @@ Lauffähig mit: `streamlit run app.py`
 
 Die **Schachregeln sind ein eigener, kleiner Zuggenerator** (`pf_brett.py`, nur Standardbibliothek). python-chess (GPL) wird nur in den Tests und der Messung benutzt, nicht in der App.
 
-## Beispielformulare
+## Testfälle der Prüfung (frühere Beispielformulare)
 
 Der Fall, den jedes Beispiel zeigt, und was die Prüfung daraus macht (Zählung aller Halbzüge; `tests/test_beispiele.py` und `tests/test_claims.py` rechnen es bei jedem Lauf neu):
 
@@ -86,8 +87,21 @@ Partien in deutscher und englischer Schreibweise werden ohne Befund gelesen und 
 
 ## Foto lesen (Gerüst)
 
-Im Tab „Foto lesen“ findet die App das Raster des Formulars selbst, und ein Erkenner liest jede beschriebene Zelle. Das Raster lässt sich von Hand nachstellen (Ausschnitt, Drehung, Zeilen, Blöcke, Spaltenbreiten).
+Nach dem Übernehmen des Fotos findet die App das Raster des Formulars selbst, ein Erkenner liest jede beschriebene Zelle, und eine Strahlsuche setzt daraus die Partie zusammen. Das Raster lässt sich unter „Erweitert“ von Hand nachstellen (Ausschnitt, Drehung, Zeilen, Blöcke, Spaltenbreiten).
 **Datenschutz beim Foto:** Die Foto-Auswahl erscheint erst, wenn Du bestätigst, dass Du die Namen schwärzt oder die Spieler einverstanden sind. Die Datei wird nur in Deinem Browser gelesen (Komponente `pf_schwaerzen.py` mit `pf_schwaerzen_frontend/index.html`, reines HTML und JavaScript): Du ziehst schwarze Rechtecke über Namen und kannst die obere Zone schwärzen. Erst nach „Übernehmen“ geht ein **neu gezeichnetes JPEG** (ohne Dateiname und Aufnahmedaten, längste Seite höchstens 2200 Pixel) an den Server, auf dem die App läuft (öffentliche Fassung: Streamlit Community Cloud). Dort liegt es nur für die Sitzung im Arbeitsspeicher (`st.session_state`, kein sitzungsübergreifender Cache; `tests/test_app.py` prüft das). Die App speichert es nicht und gibt es nicht weiter. Ob alle Namen geschwärzt sind, kann die App nicht erkennen: Das prüfst Du selbst. Die Pixel des gesendeten Bildes wurden im Browser nachgemessen (obere Zone und Markierungen schwarz, der Rest unverändert); `tests/test_schwaerzen.py` prüft den Wert der Komponente und dass die Frontend-Datei nichts nach außen sendet. Für den Betrieb der Plattform gilt deren Datenschutzerklärung.
+
+**Formulare ohne senkrechte Linien** (`pf_vorlage.py`, nur numpy und Pillow): Viele Ligaformulare haben keine Tabellenränder, sondern nur eine gedruckte Linie unter jeder Zelle, und drei Blöcke zu je 20 Zügen füllen die Seite.
+Der Finder oben (Hough-Verfahren auf senkrechten Linien) scheitert dort und gibt ab: Das Bild wird gerade gerichtet, die waagerechten Linien werden gesucht, die längste gleichmäßige Folge sind die Zeilen, und die rechten Enden der Linienstücke ergeben die Spalten (Weiß und Schwarz liegen eine Zellenbreite auseinander).
+Die Zellbereinigung (Papierton abziehen, gedruckte Linien löschen, Schrift aufrichten, `pf_raster.bereinige_zelle`) ist eingebaut, aber aus: Sie verbesserte das Lesen mit dem jetzigen Modell nicht.
+
+**Strahlsuche über die ganze Partie** (`pf_lesen.dekodiere`): Statt jede Zelle für sich zu lesen, bewertet die App Zugfolgen. Jede Hypothese ist eine legale Zugfolge, ihre Punktzahl ist die Summe der Logwahrscheinlichkeiten, mit denen das Bild jeder Zelle zum Zug passt,
+und es bleiben die 300 besten Hypothesen je Halbzug. Ein falsch gelesener Zug, nach dem die Folgezellen nicht mehr passen, verliert so gegen den richtigen. Der **Strafdeckel** (12 in der Logwahrscheinlichkeit) begrenzt den Abzug für eine Zelle:
+Kein Zug wird in einer Stellung um mehr als diesen Wert schlechter gewertet als der beste Zug dort, damit eine unleserliche Zelle die Partie nicht abbricht. Eine beendete Partie (Matt, Patt) bleibt im Rennen und zahlt für weitere Zellen nur, was die Zelle als leer unwahrscheinlich ist.
+
+**Messung an einem eigenen Scan** (`data/messung_eigener_scan.json`, nur Summenzahlen; Bild und Züge sind privat und nicht im Repository): ein Ligaformular mit 95 Halbzügen in Bleistift-Schreibschrift auf gelbem Papier, drei Blöcke zu 20 Zeilen ohne senkrechte Linien, das Modell hat solche Schrift nicht gesehen.
+Das Raster wird richtig gefunden. Der gierig gelesene Text stimmt in 10 von 95 Zellen ganz; die Strahlsuche setzt 39 von 95 Halbzügen richtig (41 %), der erste Fehler liegt bei Halbzug 16, und ab dort ziehen frühe Fehler spätere Züge mit.
+Die Zuversicht der Strahlsuche ist zu hoch: 84 Halbzüge haben mindestens 90 % Anteil unter den Hypothesen, aber nur 38 davon sind richtig. Lesen und Strahlsuche brauchten 7 und 34 Sekunden (ein Rechner, ein Lauf).
+Für Schrift dieser Art reicht das Modell also nicht; eine Prüfung jeder Zelle gegen das Foto bleibt nötig. Ein Nachtraining auf der eigenen Handschrift wäre der Hebel, ist aber nicht gemacht.
 
 Der Weg vom Bild zum Zug hat zwei Teile, die in der Prüfung zusammenlaufen:
 
@@ -195,11 +209,11 @@ Der Text des Erkenners allein trifft hier etwas mehr Züge als die Prüfung mit 
 
 Das Raster ist der empfindlichste Teil: Mit der alten Voreinstellung lag nur etwa jede dritte Zelle richtig, mit der automatischen Lage fast neun von zehn.
 
-* Offen: Nachtraining an echten deutschen Ligabögen und an Deiner Handschrift; Raster für Formulare ohne gedruckte Zeilenlinien (dort bleibt die Suche mit dem Erkenner und die Einstellung von Hand).
+* Offen: Nachtraining an echten deutschen Ligabögen und an Deiner Handschrift; Raster für Formulare ganz ohne gedruckte Zeilenlinien (dort bleibt die Einstellung von Hand).
 
 ## Bewusst nicht enthalten
 
-* **Verlässlich Handschrift lesen.** „Foto lesen“ ist ein Gerüst mit einem kleinen Modell: Auf Blättern fremder Schreiber liest es etwa 6 von 10 Zellen ganz richtig, und echte deutsche Ligabögen hat es nie gesehen (deutsche Buchstaben kennt es aus eingesetzten Handschrift-Buchstaben und Schriften). Wie gut es auf Deinen Formularen liest, ist nicht gemessen. Das Raster findet die App nur bei gedruckten Zeilenlinien.
+* **Verlässlich Handschrift lesen.** „Foto lesen“ ist ein Gerüst mit einem kleinen Modell: Auf Blättern fremder Schreiber liest es etwa 6 von 10 Zellen ganz richtig, und echte deutsche Ligabögen hat es nie gesehen (deutsche Buchstaben kennt es aus eingesetzten Handschrift-Buchstaben und Schriften). An einem eigenen Ligaformular in Bleistift-Schreibschrift setzt die Strahlsuche 39 von 95 Halbzügen richtig (siehe oben); auf anderen Formularen ist es nicht gemessen. Das Raster findet die App nur bei gedruckten Zeilenlinien.
 * **Varianten, Kommentare, Uhrzeiten** des Formulars. Text mit Klammern wird gelesen, die Klammern gehen verloren (mit Hinweis).
 * **Andere Ausgangsstellungen:** nur die normale Grundstellung, kein Schach960, keine Partie ab FEN.
 * **Mehrere Fehler auf einmal.** Die Auflösung der Unklarheiten ist für eine einzelne Störung gemessen. Gibt es mehrere, stehen die Kandidaten trotzdem da, aber die Fortsetzung kann sich an einer zweiten Störung totlaufen; ein Regelverstoß stoppt die Prüfung, bis er behoben ist.
@@ -216,7 +230,7 @@ Das Raster ist der empfindlichste Teil: Mit der alten Voreinstellung lag nur etw
 * `test_pgn.py`: Datum, Kopf, Zeilenumbruch, NAG, Text zu Zellen, Rundlauf.
 * `test_beispiele.py`: jedes Beispiel zeigt seinen Fall; `test_claims.py`: jede Zahl dieser README.
 * `test_ctc.py`, `test_raster.py`, `test_entzerren.py`, `test_lesen.py`: Foto lesen (siehe dort).
-* `test_app.py`: AppTest (Beispiele, Vorschläge übernehmen, Tabelle bearbeiten über den Widget-Zustand, Text einfügen, Upload nur nach Bestätigung, kein Bild-Cache); `test_schwaerzen.py`: Wert der Schwärzen-Komponente, Rahmen der Frontend-Datei; `test_modul_frisch.py`: geänderte Hilfsmodule werden nach einem Update neu geladen (`modul_frisch.py`, siehe unten); `test_runtime_imports.py`: Laufzeitpakete in `requirements.txt`, kein python-chess in der App.
+* `test_app.py`: AppTest (Testfälle als Zustand, Vorschläge übernehmen, Tabelle bearbeiten über den Widget-Zustand, Foto nur nach Bestätigung, kein Bild-Cache); `test_lesen.py` auch die Automatik mit simuliertem Erkenner; `test_vorlage.py`: Linienformulare, Bereinigung, Strahlsuche; `test_schwaerzen.py`: Wert der Schwärzen-Komponente, Rahmen der Frontend-Datei; `test_modul_frisch.py`: geänderte Hilfsmodule werden nach einem Update neu geladen (`modul_frisch.py`, siehe unten); `test_runtime_imports.py`: Laufzeitpakete in `requirements.txt`, kein python-chess in der App.
 
 ## Dateien
 
