@@ -17,7 +17,7 @@ import pf_ctc as C
 import pf_raster as R
 
 # Modell der App (nachtrainiert, 32 Klassen); Größe und Prüfsumme der ONNX-Datei
-MODELL_QUELLE = "https://github.com/sebastians-spielwiese/partieformular-demo/releases/download/modell-1/chess_ocr_de.onnx"
+MODELL_QUELLE = "https://github.com/sebastians-spielwiese-net/partieformular-demo/releases/download/modell-1/chess_ocr_de.onnx"
 MODELL_SHA256 = "17d722d65069d752ee0717e6f56e12271522d59b12dbb3d3f661bddefe0a9b3c"
 MODELL_BYTES = 43276402
 MODELL_ORDNER = Path(__file__).resolve().parent / "models"
