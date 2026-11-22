@@ -5,7 +5,7 @@ und die App macht den Rest von selbst: Sie **findet das Raster**, **liest jede Z
 markiert **unklare Stellen**, begründet **Regelverstöße** und erzeugt ein **PGN** für die Datenbank.
 Nacharbeit ist ausdrücklich vorgesehen: Jede Entscheidung steht als Text in der Zelle, nicht in einem versteckten Zustand. Handschrift liest die App nur teilweise richtig (Zahlen unten).
 
-Live: [spielwiese-partieformular.streamlit.app](https://spielwiese-partieformular.streamlit.app/)
+Live: [spielwiese-partieformular-demo.streamlit.app](https://spielwiese-partieformular-demo.streamlit.app/)
 
 Lauffähig mit: `streamlit run app.py`
 
